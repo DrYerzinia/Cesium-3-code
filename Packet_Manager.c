@@ -415,7 +415,7 @@ void SLIP_TX_consume_UHF_RX(){
 }
 
 
-uint8_t internal_ip[] = {0xc0, 0xa8, 0x01, 0x8d}; // 192.168.1.141
+uint8_t internal_ip[] = {0x01, 0x01, 0x01, 0x03}; // 1.1.1.3
 uint8_t ground_ip[]   = {0x01, 0x01, 0x01, 0x02}; // 1.1.1.2
 
 void UHF_TX_consume_SLIP_RX(){
@@ -440,7 +440,7 @@ void UHF_TX_consume_SLIP_RX(){
             uint8_t * data = pcs->producer->buffer;
 
             // TODO figure out what actual filtering to use here
-            if(memcmp(data+offset+12, internal_ip, 4) != 0){ // Check that IP address matches target
+            if(memcmp(data+offset+12, internal_ip, 4) != 0){ // Check that IP address not meant for internal
             //if(memcmp(data+offset+12, ground_ip, 4) != 0){ // Check that IP address matches target
 
                 UHF_TX.state = BUSY;
