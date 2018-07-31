@@ -202,6 +202,7 @@ void UHF_irq_cb(uint8_t *data, uint16_t len){
 
               uhf_radio_state = RX_DONE;
               SPIRIT1_get_rx_fifo_len_cb(&sconf, UHF_rx_fifo_len);
+              uhf_rx_packet_counter++;
 
           } else if(val & SPIRIT1_IRQ_RX_FIFO_ALMOST_FULL){
 
@@ -228,7 +229,8 @@ void UHF_default_config(){
     Digital_Pot_SPI_stop();
 
     // Configure Radio
-    SPIRIT1_disable_smps(&sconf);
+    //SPIRIT1_disable_smps(&sconf);
+    SPIRIT1_set_crystal_correction(&sconf, -85);
     SPIRIT1_configure_gpio(&sconf, 0, SPIRIT1_GPIO_nIRQ | SPIRIT1_GPIO_DIG_OUT_LOWPWR);
     SPIRIT1_configure_irq_mask(&sconf, SPIRIT1_IRQ_RX_DATA_READY | SPIRIT1_IRQ_RX_FIFO_ALMOST_FULL | SPIRIT1_IRQ_TX_FIFO_ALMOST_EMPTY | SPIRIT1_IRQ_TX_DATA_SENT);
     SPIRIT1_setup_FIFO_thresholds(&sconf, 0x30, 0x30, 0x30, 20);
@@ -247,7 +249,7 @@ void UHF_default_config(){
     pkt_conf.len_wid = 8;      // up to 256 byte packet size
     pkt_conf.crc_mode = CRC07;
     pkt_conf.whitening_en = true;
-    pkt_conf.fec_en = true;
+    pkt_conf.fec_en = false;
     pkt_conf.crc_check_en = true;
     SPIRIT1_set_packet_config(&sconf, &pkt_conf);
 
@@ -259,6 +261,19 @@ void UHF_default_config(){
     freq_conf.vco_hl = SPIRIT1_VCO_L_SEL;
     SPIRIT1_set_base_frequency(&sconf, &freq_conf);
 
+    SPIRIT1_MODULATION_CONFIG gfsk_4_8_kbps;
+    gfsk_4_8_kbps.datarate_m = 0x93;   // 4.8kbps
+    gfsk_4_8_kbps.datarate_e = 0x07;
+    gfsk_4_8_kbps.fdev_m  = 0x05;      // 2.4kHz deviation
+    gfsk_4_8_kbps.fdev_e = 0x01;
+    gfsk_4_8_kbps.chflt_m  = 0x01;     // 26kHz Channel Filter
+    gfsk_4_8_kbps.chflt_e = 0x05;
+    gfsk_4_8_kbps.cw = 0;              // No CW tone
+    gfsk_4_8_kbps.bt_sel = BT_SEL_1;
+    gfsk_4_8_kbps.mod_type = GFSK;
+    SPIRIT1_set_modulation(&sconf, &gfsk_4_8_kbps);
+
+    /*
     SPIRIT1_MODULATION_CONFIG gmsk_4_8_kbps;
     gmsk_4_8_kbps.datarate_m = 0x93;   // 4.8kbps
     gmsk_4_8_kbps.datarate_e = 0x07;
@@ -270,7 +285,7 @@ void UHF_default_config(){
     gmsk_4_8_kbps.bt_sel = BT_SEL_0_5;
     gmsk_4_8_kbps.mod_type = GFSK;
     SPIRIT1_set_modulation(&sconf, &gmsk_4_8_kbps);
-
+    */
     /*
     SPIRIT1_MODULATION_CONFIG gmsk_9_6_kbps;
     gmsk_9_6_kbps.datarate_m = 0x8B;   // 9.6kbps
@@ -297,6 +312,20 @@ void UHF_default_config(){
     gmsk_38_4_kbps.mod_type = GFSK;
     SPIRIT1_set_modulation(&sconf, &gmsk_38_4_kbps);
     */
+    /*
+    SPIRIT1_MODULATION_CONFIG gfsk_38_4_kbps;
+    gfsk_38_4_kbps.datarate_m = 131; // 38.4kbps
+    gfsk_38_4_kbps.datarate_e = 10;
+    gfsk_38_4_kbps.fdev_m  = 5;      // 20kHz deviation ~
+    gfsk_38_4_kbps.fdev_e = 4;
+    gfsk_38_4_kbps.chflt_m  = 1;     // 100kHz Channel Filter
+    gfsk_38_4_kbps.chflt_e = 3;
+    gfsk_38_4_kbps.cw = 0;           // No CW tone
+    gfsk_38_4_kbps.bt_sel = BT_SEL_1;
+    gfsk_38_4_kbps.mod_type = GFSK;
+    SPIRIT1_set_modulation(&sconf, &gfsk_38_4_kbps);
+    */
+
 
     // Configure IRQ sources
 
@@ -351,6 +380,9 @@ void UHF_init_RX(){
 
     SPIRIT1_disable_persistent_tx(&sconf);
     SPIRIT1_abort(&sconf);
+
+    // Flush TX Fifo incase some crap got left in it
+    SPIRIT1_flush_tx(&sconf);
 
     // Turn off PA
     UHF_PA_Gate_EN(false);

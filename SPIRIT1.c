@@ -174,7 +174,8 @@ void SPIRIT1_configure_pa(SPIRIT1_CONFIG * sconf, uint8_t pa_power){
 // TODO complete 12 bit 2's complment write
 void SPIRIT1_set_crystal_correction(SPIRIT1_CONFIG * sconf, int16_t corr){
 
-  writereg8(sconf, SPIRIT1_FC_OFFSET_0, corr);
+    writereg8(sconf, SPIRIT1_FC_OFFSET_1, (corr >> 8) & 0xFF);
+    writereg8(sconf, SPIRIT1_FC_OFFSET_0, corr & 0xFF);
 
 }
 

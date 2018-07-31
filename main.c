@@ -70,6 +70,8 @@ uint8_t heartbeat_counter = 0;
 uint8_t ticks_uhf_tx_pc_same;
 uint16_t last_uhf_tx_packet_counter;
 
+uint8_t ticks_uhf_rx_partial = 0;
+
 // Timer A0 interrupt service routine
 #pragma vector=TIMER0_A0_VECTOR
 __interrupt void Timer_A0(void){
@@ -78,6 +80,24 @@ __interrupt void Timer_A0(void){
     if(heartbeat_counter == 10){
         GPIO_toggleOutputOnPin(GPIO_PORT_P1, GPIO_PIN0);
         heartbeat_counter = 0;
+    }
+
+    if(uhf_radio_state == RX_PARTIAL){
+
+        ticks_uhf_rx_partial++;
+
+        if(ticks_uhf_rx_partial > 10){
+
+            // RESET RX buffer to last starting p
+            UHF_RX.write_location = UHF_RX.last_pkt_start_location;
+            UHF_init_RX();
+
+        }
+
+    } else {
+
+        ticks_uhf_rx_partial = 0;
+
     }
 
     if(uhf_radio_state == TX){
@@ -112,6 +132,36 @@ __interrupt void Timer_A0(void){
 
 }
 
+void Init_Sneaky_UART()
+{
+    // Configure UART
+    EUSCI_A_UART_initParam param = {0};
+    param.selectClockSource = EUSCI_A_UART_CLOCKSOURCE_SMCLK;
+    param.clockPrescalar = 4;
+    param.firstModReg = 5;
+    param.secondModReg = 0x55;
+    param.parity = EUSCI_A_UART_NO_PARITY;
+    param.msborLsbFirst = EUSCI_A_UART_LSB_FIRST;
+    param.numberofStopBits = EUSCI_A_UART_ONE_STOP_BIT;
+    param.uartMode = EUSCI_A_UART_MODE;
+    param.overSampling = EUSCI_A_UART_OVERSAMPLING_BAUDRATE_GENERATION;
+
+    if(STATUS_FAIL == EUSCI_A_UART_init(EUSCI_A1_BASE, &param))
+        return;
+
+    EUSCI_A_UART_enable(EUSCI_A1_BASE);
+
+    EUSCI_A_UART_clearInterrupt(EUSCI_A1_BASE,
+                                EUSCI_A_UART_RECEIVE_INTERRUPT);
+
+    // Enable USCI_A1 RX interrupt
+    EUSCI_A_UART_enableInterrupt(EUSCI_A1_BASE,
+                                 EUSCI_A_UART_RECEIVE_INTERRUPT); // Enable interrupt
+
+    // Enable global interrupt
+    __enable_interrupt();
+}
+
 int main(void)
 {
 
@@ -123,6 +173,7 @@ int main(void)
     Init_SysTick();
 
     Init_UART();
+    Init_Sneaky_UART();
 
     Packet_Manger_init();
 
@@ -154,7 +205,7 @@ void Init_GPIO()
 
     // Set all GPIO pins to output low for low power
     GPIO_setOutputLowOnPin(GPIO_PORT_P1, GPIO_PIN0|GPIO_PIN1|GPIO_PIN2|GPIO_PIN3|GPIO_PIN4|GPIO_PIN5|GPIO_PIN6|GPIO_PIN7);
-    GPIO_setOutputLowOnPin(GPIO_PORT_P2, GPIO_PIN2|GPIO_PIN3|GPIO_PIN4|GPIO_PIN5|GPIO_PIN6|GPIO_PIN7);
+    GPIO_setOutputLowOnPin(GPIO_PORT_P2, GPIO_PIN2|GPIO_PIN3|GPIO_PIN4|GPIO_PIN7);
     GPIO_setOutputLowOnPin(GPIO_PORT_P3, GPIO_PIN0|GPIO_PIN1|GPIO_PIN2|GPIO_PIN3|GPIO_PIN4|GPIO_PIN5|GPIO_PIN6|GPIO_PIN7);
     GPIO_setOutputLowOnPin(GPIO_PORT_P4, GPIO_PIN1|GPIO_PIN2|GPIO_PIN4|GPIO_PIN5|GPIO_PIN6|GPIO_PIN7);
     GPIO_setOutputLowOnPin(GPIO_PORT_P5, GPIO_PIN0|GPIO_PIN1|GPIO_PIN2|GPIO_PIN3|GPIO_PIN6|GPIO_PIN7);
@@ -169,8 +220,8 @@ void Init_GPIO()
     GPIO_setOutputHighOnPin(GPIO_PORT_P4, GPIO_PIN4); // Disable SPIRIT1
 
     GPIO_setAsOutputPin(GPIO_PORT_P1, GPIO_PIN0|GPIO_PIN1|GPIO_PIN2|GPIO_PIN3|GPIO_PIN4|GPIO_PIN5|GPIO_PIN6|GPIO_PIN7);
-    GPIO_setAsOutputPin(GPIO_PORT_P2, GPIO_PIN0|GPIO_PIN2|GPIO_PIN3|GPIO_PIN4|GPIO_PIN5|GPIO_PIN6|GPIO_PIN7);
-    GPIO_setAsOutputPin(GPIO_PORT_P3, GPIO_PIN0|GPIO_PIN1|GPIO_PIN2|GPIO_PIN3|GPIO_PIN4|GPIO_PIN5|GPIO_PIN6|GPIO_PIN7);
+    GPIO_setAsOutputPin(GPIO_PORT_P2, GPIO_PIN0|GPIO_PIN2|GPIO_PIN3|GPIO_PIN4|GPIO_PIN5|GPIO_PIN7);
+    GPIO_setAsOutputPin(GPIO_PORT_P3, GPIO_PIN0|GPIO_PIN1|GPIO_PIN4|GPIO_PIN5|GPIO_PIN6|GPIO_PIN7);
     GPIO_setAsOutputPin(GPIO_PORT_P4, GPIO_PIN0|GPIO_PIN1|GPIO_PIN2|GPIO_PIN4|GPIO_PIN5|GPIO_PIN6|GPIO_PIN7);
     GPIO_setAsOutputPin(GPIO_PORT_P5, GPIO_PIN0|GPIO_PIN1|GPIO_PIN2|GPIO_PIN3|GPIO_PIN4|GPIO_PIN6|GPIO_PIN7);
     GPIO_setAsOutputPin(GPIO_PORT_P6, GPIO_PIN0|GPIO_PIN1|GPIO_PIN2|GPIO_PIN3|GPIO_PIN4|GPIO_PIN5|GPIO_PIN6|GPIO_PIN7);
@@ -185,6 +236,10 @@ void Init_GPIO()
     //GPIO_setAsOutputPin(GPIO_PORT_P2, GPIO_PIN0);
     GPIO_setAsPeripheralModuleFunctionInputPin(GPIO_PORT_P2, GPIO_PIN1, GPIO_SECONDARY_MODULE_FUNCTION);
     GPIO_setAsPeripheralModuleFunctionOutputPin(GPIO_PORT_P2, GPIO_PIN0, GPIO_SECONDARY_MODULE_FUNCTION);
+
+    // EPS UART
+    GPIO_setAsPeripheralModuleFunctionInputPin(GPIO_PORT_P2, GPIO_PIN5, GPIO_SECONDARY_MODULE_FUNCTION);
+    GPIO_setAsPeripheralModuleFunctionOutputPin(GPIO_PORT_P2, GPIO_PIN6, GPIO_SECONDARY_MODULE_FUNCTION);
 
     // Configure UHF SPI
     GPIO_setAsPeripheralModuleFunctionInputPin(GPIO_PORT_P5, GPIO_PIN1, GPIO_PRIMARY_MODULE_FUNCTION);
@@ -261,6 +316,25 @@ void Init_UART()
     __enable_interrupt();
 }
 
+// SNEAKY UART
+#pragma vector = USCI_A1_VECTOR
+__interrupt void USCI_A1_ISR(void){
+    uint8_t rx_data;
+    switch (__even_in_range(UCA1IV, USCI_UART_UCTXCPTIFG)) {
+        case USCI_NONE: break;
+        case USCI_UART_UCRXIFG:
+            rx_data = (HWREG16(EUSCI_A1_BASE + OFS_UCAxRXBUF)); // Read UART data fast
+            EUSCI_A_UART_transmitData(EUSCI_A1_BASE, rx_data);
+            break;
+
+        case USCI_UART_UCTXIFG: break;
+        case USCI_UART_UCSTTIFG: break;
+        case USCI_UART_UCTXCPTIFG:
+            break;
+
+    }
+}
+
 // SLIP Interface Interrupt
 #pragma vector = USCI_A0_VECTOR
 __interrupt void USCI_A0_ISR(void){
@@ -279,6 +353,5 @@ __interrupt void USCI_A0_ISR(void){
         case USCI_UART_UCTXCPTIFG:
             SLIP_TX_consume_byte();
             break;
-
     }
 }

@@ -276,6 +276,7 @@ uint16_t UHF_TX_count;
 #define FIFO_FILL 40
 
 uint16_t uhf_tx_packet_counter = 0;
+uint16_t uhf_rx_packet_counter = 0;
 
 void write_fifo(uint16_t len){
 
@@ -334,6 +335,7 @@ void UHF_TX_consume_data(){
 }
 
 static inline void SLIP_TX_consume_SLIP_RX(){
+
     // Loopback debug enabled
     if(slip_loopback_mode == SELF){
 
@@ -437,7 +439,9 @@ void UHF_TX_consume_SLIP_RX(){
             uint16_t offset = pinfo->packet_offset;
             uint8_t * data = pcs->producer->buffer;
 
-            if(memcmp(data+offset+12, ground_ip, 4) != 0){ // Check that IP address matches target
+            // TODO figure out what actual filtering to use here
+            if(memcmp(data+offset+12, internal_ip, 4) != 0){ // Check that IP address matches target
+            //if(memcmp(data+offset+12, ground_ip, 4) != 0){ // Check that IP address matches target
 
                 UHF_TX.state = BUSY;
                 pinfo->state = BEING_CONSUMED;

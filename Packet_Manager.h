@@ -59,8 +59,10 @@ typedef struct {
 } Consumer;
 
 extern uint16_t uhf_tx_packet_counter;
+extern uint16_t uhf_rx_packet_counter;
 
 extern Consumer UHF_TX;
+extern Producer UHF_RX;
 
 void Packet_Manger_init();
 void Packet_Manger_process();
