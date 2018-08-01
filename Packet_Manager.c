@@ -13,63 +13,69 @@ typedef enum {
 Loopback_Mode slip_loopback_mode = DISABLED;
 Loopback_Mode radio_loopback_mode = DISABLED;
 
-#define MAX_PACKET_SIZE 256
-
 #define COMMAND_LED_OFF   0x00
 #define COMMAND_LED_ON    0x01
 #define COMMAND_ENTER_BSL 0xA3
 
 // Producer indexes for consumers
-#define SLIP_TX_PRODUCER_COUNT 4
-#define SLIP_TX_to_SLIP_RX 0
-#define SLIP_TX_to_UHF_RX 1
+#define CDH_SLIP_TX_PRODUCER_COUNT 4
+#define CDH_SLIP_TX_to_CDH_SLIP_RX 0
+#define CDH_SLIP_TX_to_UHF_RX 1
 
 #define Internal_Message_PRODUCER_COUNT 4
-#define SLIP_RX_to_Internal_Message 0
+#define CDH_SLIP_RX_to_Internal_Message 0
 
 #define UHF_TX_PRODUCER_COUNT 4
-#define SLIP_RX_to_UHF_TX 0
+#define CDH_SLIP_RX_to_UHF_TX 0
 
-Producer SLIP_RX;
+Producer CDH_SLIP_RX;
 Producer UHF_RX;
 Producer SBAND_RX;
 Producer Internal_Message_Prod;
 
-Consumer SLIP_TX;
+Consumer CDH_SLIP_TX;
 Consumer UHF_TX;
 Consumer SBAND_TX;
 Consumer Internal_Message_Cons;
 
-#define SLIP_RX_BUFFER_SIZE 8192
-#define SLIP_RX_PACKET_LIST_SIZE 32
+#define CDH_SLIP_RX_BUFFER_SIZE 8192
+#define CDH_SLIP_RX_PACKET_LIST_SIZE 32
 
-#pragma PERSISTENT(SLIP_RX_buffer)
+#pragma PERSISTENT(CDH_SLIP_RX_buffer)
 
-uint8_t SLIP_RX_buffer[SLIP_RX_BUFFER_SIZE] = {0};
+uint8_t CDH_SLIP_RX_buffer[CDH_SLIP_RX_BUFFER_SIZE] = {0};
 
 uint8_t UHF_RX_buffer[512];
 uint8_t SBAND_RX_buffer[512];
 uint8_t Internal_Message_buffer[256];
 
-Packet_Info SLIP_RX_packet_list[SLIP_RX_PACKET_LIST_SIZE];
+Packet_Info CDH_SLIP_RX_packet_list[CDH_SLIP_RX_PACKET_LIST_SIZE];
 Packet_Info SBAND_RX_packet_list[5];
 Packet_Info UHF_RX_packet_list[5];
 Packet_Info Internal_Message_packet_list[2];
 
-Producer_Consumer_State SLIP_TX_producer_list[SLIP_TX_PRODUCER_COUNT];
+Producer_Consumer_State CDH_SLIP_TX_producer_list[CDH_SLIP_TX_PRODUCER_COUNT];
 Producer_Consumer_State UHF_TX_producer_list[UHF_TX_PRODUCER_COUNT];
 Producer_Consumer_State Internal_Message_producer_list[Internal_Message_PRODUCER_COUNT];
+
+SLIP_Interface CDH_SLIP;
+SLIP_Interface EPS_SLIP;
+
+void CDH_slip_write(uint8_t data){
+
+        HWREG16(EUSCI_A0_BASE + OFS_UCAxTXBUF) = data;
+}
 
 void Packet_Manger_init(){
 
     // Initalize Producers
-    SLIP_RX.buffer = SLIP_RX_buffer;
-    SLIP_RX.buffer_length = SLIP_RX_BUFFER_SIZE;
-    SLIP_RX.last_pkt_start_location = 0;
-    SLIP_RX.packet_list = SLIP_RX_packet_list;
-    SLIP_RX.packet_list_length = SLIP_RX_PACKET_LIST_SIZE;
-    SLIP_RX.packet_list_offset = 0;
-    SLIP_RX.write_location = 0;
+    CDH_SLIP_RX.buffer = CDH_SLIP_RX_buffer;
+    CDH_SLIP_RX.buffer_length = CDH_SLIP_RX_BUFFER_SIZE;
+    CDH_SLIP_RX.last_pkt_start_location = 0;
+    CDH_SLIP_RX.packet_list = CDH_SLIP_RX_packet_list;
+    CDH_SLIP_RX.packet_list_length = CDH_SLIP_RX_PACKET_LIST_SIZE;
+    CDH_SLIP_RX.packet_list_offset = 0;
+    CDH_SLIP_RX.write_location = 0;
 
     UHF_RX.buffer = UHF_RX_buffer;
     UHF_RX.buffer_length = 512;
@@ -93,66 +99,27 @@ void Packet_Manger_init(){
     Internal_Message_Prod.write_location = 0;
 
     // Initialize Consumers
-    SLIP_TX.producer_list = SLIP_TX_producer_list;
-    SLIP_TX.state = IDLE;
-    SLIP_TX_producer_list[SLIP_TX_to_SLIP_RX].producer = &SLIP_RX;
-    SLIP_TX_producer_list[SLIP_TX_to_SLIP_RX].packet_list_offset = 0;
-    SLIP_TX_producer_list[SLIP_TX_to_UHF_RX].producer = &UHF_RX;
-    SLIP_TX_producer_list[SLIP_TX_to_UHF_RX].packet_list_offset = 0;
+    CDH_SLIP_TX.producer_list = CDH_SLIP_TX_producer_list;
+    CDH_SLIP_TX.state = IDLE;
+    CDH_SLIP_TX_producer_list[CDH_SLIP_TX_to_CDH_SLIP_RX].producer = &CDH_SLIP_RX;
+    CDH_SLIP_TX_producer_list[CDH_SLIP_TX_to_CDH_SLIP_RX].packet_list_offset = 0;
+    CDH_SLIP_TX_producer_list[CDH_SLIP_TX_to_UHF_RX].producer = &UHF_RX;
+    CDH_SLIP_TX_producer_list[CDH_SLIP_TX_to_UHF_RX].packet_list_offset = 0;
 
     Internal_Message_Cons.producer_list = Internal_Message_producer_list;
     Internal_Message_Cons.state = IDLE;
-    Internal_Message_producer_list[SLIP_RX_to_Internal_Message].producer = &SLIP_RX;
-    Internal_Message_producer_list[SLIP_RX_to_Internal_Message].packet_list_offset = 0;
+    Internal_Message_producer_list[CDH_SLIP_RX_to_Internal_Message].producer = &CDH_SLIP_RX;
+    Internal_Message_producer_list[CDH_SLIP_RX_to_Internal_Message].packet_list_offset = 0;
 
     UHF_TX.producer_list = UHF_TX_producer_list;
     UHF_TX.state = IDLE;
-    UHF_TX_producer_list[SLIP_RX_to_UHF_TX].producer = &SLIP_RX;
-    UHF_TX_producer_list[SLIP_RX_to_UHF_TX].packet_list_offset = 0;
+    UHF_TX_producer_list[CDH_SLIP_RX_to_UHF_TX].producer = &CDH_SLIP_RX;
+    UHF_TX_producer_list[CDH_SLIP_RX_to_UHF_TX].packet_list_offset = 0;
+
+    SLIP_init(&CDH_SLIP, CDH_slip_write, &CDH_SLIP_TX, &CDH_SLIP_RX);
+
 
 }
-
-static inline advance_producer(Producer * p){
-
-    uint16_t plen = p->write_location - p->last_pkt_start_location;
-    if(plen == 0) return;
-
-    // Set new packet parameters in new packet list
-    p->packet_list[p->packet_list_offset].packet_offset = p->last_pkt_start_location;
-    p->packet_list[p->packet_list_offset].packet_length = plen;
-    p->packet_list[p->packet_list_offset].state = FRESH;
-
-    // Check to see if we have room for another packet before end of buffer and prepare to start next packet
-    if(p->buffer_length-p->write_location < MAX_PACKET_SIZE){
-        p->write_location = 0;
-    }
-    p->last_pkt_start_location = p->write_location;
-
-    // Advance the packet list and allow consumers to access last packet
-    p->packet_list_offset++;
-    if(p->packet_list_offset == p->packet_list_length){ // Wrap the packet list
-        p->packet_list_offset = 0;
-    }
-
-    // TODO: will be difficult to check overflow.  Will have to advance buffer to find
-    // first non consumed packet in list and see its offset to see if we are going to
-    // overrun it
-
-}
-
-typedef enum {
-    START,
-    NORMAL,
-    ESCAPE,
-    END
-} SLIP_STATE;
-
-SLIP_STATE slip_rx_state;
-
-#define SLIP_END     0xC0
-#define SLIP_ESC     0xDB
-#define SLIP_ESC_END 0xDC
-#define SLIP_ESC_ESC 0xDD
 
 void UHF_RX_produce_packet(uint8_t *data, uint16_t len, bool finish){
 
@@ -160,111 +127,6 @@ void UHF_RX_produce_packet(uint8_t *data, uint16_t len, bool finish){
     UHF_RX.write_location += len;
     if(finish){
       advance_producer(&UHF_RX);
-    }
-
-}
-
-void SLIP_RX_produce_byte(uint8_t byte){
-
-    switch(slip_rx_state){
-        case START:
-        case NORMAL:
-            switch(byte){
-                case SLIP_END:
-                    slip_rx_state = NORMAL;
-                    advance_producer(&SLIP_RX);
-                    break;
-                case SLIP_ESC:
-                    slip_rx_state = ESCAPE;
-                    break;
-                default:
-                    SLIP_RX.buffer[SLIP_RX.write_location++] = byte;
-                    break;
-            }
-            break;
-        case ESCAPE:
-            switch(byte){
-                case SLIP_ESC_END:
-                    SLIP_RX.buffer[SLIP_RX.write_location++] = SLIP_END;
-                    break;
-                case SLIP_ESC_ESC:
-                    SLIP_RX.buffer[SLIP_RX.write_location++] = SLIP_ESC;
-                    break;
-                default:
-                    // TODO ERROR STATE
-                    break;
-            }
-            slip_rx_state = NORMAL;
-            break;
-
-    }
-
-}
-
-Packet_Info * SLIP_TX_pinfo = 0;
-uint8_t * SLIP_TX_data;
-uint16_t SLIP_TX_count;
-
-SLIP_STATE slip_tx_state;
-
-void SLIP_TX_consume_byte(){
-
-    if(SLIP_TX_pinfo == 0) return;
-
-    if(slip_tx_state == START){
-        HWREG16(EUSCI_A0_BASE + OFS_UCAxTXBUF) = SLIP_END;
-        slip_tx_state = NORMAL;
-    }
-
-    if(SLIP_TX_count == SLIP_TX_pinfo->packet_length){
-
-        if(slip_tx_state == NORMAL){
-
-            HWREG16(EUSCI_A0_BASE + OFS_UCAxTXBUF) = SLIP_END;
-            slip_tx_state = END;
-            return;
-
-        } else if(slip_tx_state == END){
-
-            SLIP_TX_pinfo = 0;
-            SLIP_TX.state = IDLE;
-            // TODO mark packet as consumed
-
-        }
-
-        return;
-
-    }
-
-    uint8_t byte = SLIP_TX_data[SLIP_TX_pinfo->packet_offset+SLIP_TX_count];
-
-    switch(slip_tx_state){
-        case NORMAL:
-            switch(byte){
-                case SLIP_END:
-                case SLIP_ESC:
-                    slip_tx_state = ESCAPE;
-                    HWREG16(EUSCI_A0_BASE + OFS_UCAxTXBUF) = SLIP_ESC;
-                    break;
-                default:
-                    HWREG16(EUSCI_A0_BASE + OFS_UCAxTXBUF) = byte;
-                    SLIP_TX_count++;
-                    break;
-            }
-            break;
-        case ESCAPE:
-            switch(byte){
-                case SLIP_END:
-                    HWREG16(EUSCI_A0_BASE + OFS_UCAxTXBUF) = SLIP_ESC_END;
-                    break;
-                case SLIP_ESC:
-                    HWREG16(EUSCI_A0_BASE + OFS_UCAxTXBUF) = SLIP_ESC_ESC;
-                    break;
-            }
-            SLIP_TX_count++;
-            slip_tx_state = NORMAL;
-            break;
-
     }
 
 }
@@ -334,16 +196,16 @@ void UHF_TX_consume_data(){
 
 }
 
-static inline void SLIP_TX_consume_SLIP_RX(){
+static inline void CDH_SLIP_TX_consume_CDH_SLIP_RX(){
 
     // Loopback debug enabled
     if(slip_loopback_mode == SELF){
 
         // SLIP TX not currently DMAing anything
-        if(SLIP_TX.state == IDLE){
+        if(CDH_SLIP_TX.state == IDLE){
 
             // If we are behind the producer in packets
-            Producer_Consumer_State * pcs = &(SLIP_TX.producer_list[SLIP_TX_to_SLIP_RX]);
+            Producer_Consumer_State * pcs = &(CDH_SLIP_TX.producer_list[CDH_SLIP_TX_to_CDH_SLIP_RX]);
             while(pcs->packet_list_offset != pcs->producer->packet_list_offset){
 
                 Packet_Info * pinfo = &(pcs->producer->packet_list[pcs->packet_list_offset]);
@@ -351,16 +213,11 @@ static inline void SLIP_TX_consume_SLIP_RX(){
                 // If fresh
                 if(pinfo->state == FRESH){
 
-                    // Set variables for SLIP TX to read from
-                    SLIP_TX_pinfo = pinfo;
-                    SLIP_TX_data = pcs->producer->buffer;
-                    SLIP_TX_count = 0;
-
-                    slip_tx_state = START;
-                    SLIP_TX_consume_byte();
+                    // Starts sending packet through UART
+                    SLIP_start(&CDH_SLIP, pinfo, pcs->producer->buffer);
 
                     pinfo->state = BEING_CONSUMED;
-                    SLIP_TX.state = BUSY;
+                    CDH_SLIP_TX.state = BUSY;
 
                     break;
 
@@ -376,13 +233,13 @@ static inline void SLIP_TX_consume_SLIP_RX(){
     }
 }
 
-void SLIP_TX_consume_UHF_RX(){
+void CDH_SLIP_TX_consume_UHF_RX(){
 
     // SLIP TX not currently DMAing anything
-    if(SLIP_TX.state == IDLE){
+    if(CDH_SLIP_TX.state == IDLE){
 
         // If we are behind the producer in packets
-        Producer_Consumer_State * pcs = &(SLIP_TX.producer_list[SLIP_TX_to_UHF_RX]);
+        Producer_Consumer_State * pcs = &(CDH_SLIP_TX.producer_list[CDH_SLIP_TX_to_UHF_RX]);
         while(pcs->packet_list_offset != pcs->producer->packet_list_offset){
 
             Packet_Info * pinfo = &(pcs->producer->packet_list[pcs->packet_list_offset]);
@@ -390,16 +247,11 @@ void SLIP_TX_consume_UHF_RX(){
             // If fresh
             if(pinfo->state == FRESH){
 
-                // Set variables for SLIP TX to read from
-                SLIP_TX_pinfo = pinfo;
-                SLIP_TX_data = pcs->producer->buffer;
-                SLIP_TX_count = 0;
-
-                slip_tx_state = START;
-                SLIP_TX_consume_byte();
+                // Starts sending packet through UART
+                SLIP_start(&CDH_SLIP, pinfo, pcs->producer->buffer);
 
                 pinfo->state = BEING_CONSUMED;
-                SLIP_TX.state = BUSY;
+                CDH_SLIP_TX.state = BUSY;
 
                 break;
 
@@ -418,7 +270,7 @@ void SLIP_TX_consume_UHF_RX(){
 uint8_t internal_ip[] = {0x01, 0x01, 0x01, 0x03}; // 1.1.1.3
 uint8_t ground_ip[]   = {0x01, 0x01, 0x01, 0x02}; // 1.1.1.2
 
-void UHF_TX_consume_SLIP_RX(){
+void UHF_TX_consume_CDH_SLIP_RX(){
 
     // Conditions for execution
     // 1. Not currently RXing packet, checked by RADIO state not RX_PARITAL, RX_COMPLETE
@@ -428,7 +280,7 @@ void UHF_TX_consume_SLIP_RX(){
 
     if(UHF_TX.state == BUSY) return;
 
-    Producer_Consumer_State * pcs = &(UHF_TX.producer_list[SLIP_RX_to_UHF_TX]);
+    Producer_Consumer_State * pcs = &(UHF_TX.producer_list[CDH_SLIP_RX_to_UHF_TX]);
     while(pcs->packet_list_offset != pcs->producer->packet_list_offset){
 
         Packet_Info * pinfo = &(pcs->producer->packet_list[pcs->packet_list_offset]);
@@ -468,11 +320,11 @@ void UHF_TX_consume_SLIP_RX(){
 }
 
 
-static inline void Internal_Message_consume_SLIP_RX(){
+static inline void Internal_Message_consume_CDH_SLIP_RX(){
 
     if(slip_loopback_mode == DISABLED){
 
-        Producer_Consumer_State * pcs = &(Internal_Message_Cons.producer_list[SLIP_RX_to_Internal_Message]);
+        Producer_Consumer_State * pcs = &(Internal_Message_Cons.producer_list[CDH_SLIP_RX_to_Internal_Message]);
         while(pcs->packet_list_offset != pcs->producer->packet_list_offset){
 
             Packet_Info * pinfo = &(pcs->producer->packet_list[pcs->packet_list_offset]);
@@ -534,7 +386,7 @@ void Packet_Manger_process(){
 
     // 3 ) UHF TX             from   SLIP RX            (Skip if SLIP Loopback Mode ALL)
     // 4 ) S-Band TX          from   SLIP RX            (Skip if SLIP Loopback Mode ALL)
-    UHF_TX_consume_SLIP_RX();
+    UHF_TX_consume_CDH_SLIP_RX();
 
     // We want our messages to CDH to be before radio traffic and they should happen seldomly (Buffer Full Warning)
 
@@ -544,18 +396,18 @@ void Packet_Manger_process(){
 
     // 6 ) SLIP TX            from   S-Band RX          (Skip if RADIO Loopback Mode not NONE)
     // 7 ) SLIP TX            from   UHF RX             (Skip if RADIO Loopback Mode not NONE)
-    SLIP_TX_consume_UHF_RX();
+    CDH_SLIP_TX_consume_UHF_RX();
 
     // Worry about reading in internal messages after things are on there way to radios
     // 8 ) Internal Message   from   SLIP RX            (Skip if SLIP  Loopback Mode ALL)
     // 9 ) Internal Message   from   UHF RX             (Skip if RADIO Loopback Mode not NONE)
     // 10) Internal Message   from   S-Band RX          (Skip if RADIO Loopback Mode not NONE)
-    Internal_Message_consume_SLIP_RX();
+    Internal_Message_consume_CDH_SLIP_RX();
 
     // Loopback test modes lowest priority
 
     // 11) SLIP TX            from   SLIP RX            (If SLIP Loopback Mode ALL)
-    SLIP_TX_consume_SLIP_RX();
+    CDH_SLIP_TX_consume_CDH_SLIP_RX();
 
     // 12) UHF TX             from   UHF RX             (If RADIO Loopback Mode SELF)
     // 13) UHF TX             from   S-Band RX          (If RADIO Loopback Mode OTHER)
@@ -563,4 +415,25 @@ void Packet_Manger_process(){
     // 14) S-Band TX          from   S-Band RX          (If RADIO Loopback Mode SELF)
     // 15) S-Band TX          from   UHF RX             (If RADIO Loopback Mode OTHER)
 
+}
+
+// CDH SLIP Interface Interrupt
+#pragma vector = USCI_A0_VECTOR
+__interrupt void USCI_A0_ISR(void){
+
+    uint8_t rx_data;
+    switch (__even_in_range(UCA0IV, USCI_UART_UCTXCPTIFG)) {
+        case USCI_NONE: break;
+        case USCI_UART_UCRXIFG:
+
+            rx_data = (HWREG16(EUSCI_A0_BASE + OFS_UCAxRXBUF)); // Read UART data fast
+            SLIP_RX_produce_byte(&CDH_SLIP, rx_data);
+            break;
+
+        case USCI_UART_UCTXIFG: break;
+        case USCI_UART_UCSTTIFG: break;
+        case USCI_UART_UCTXCPTIFG:
+            SLIP_TX_consume_byte(&CDH_SLIP);
+            break;
+    }
 }

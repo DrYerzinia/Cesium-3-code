@@ -335,23 +335,3 @@ __interrupt void USCI_A1_ISR(void){
     }
 }
 
-// SLIP Interface Interrupt
-#pragma vector = USCI_A0_VECTOR
-__interrupt void USCI_A0_ISR(void){
-
-    uint8_t rx_data;
-    switch (__even_in_range(UCA0IV, USCI_UART_UCTXCPTIFG)) {
-        case USCI_NONE: break;
-        case USCI_UART_UCRXIFG:
-
-            rx_data = (HWREG16(EUSCI_A0_BASE + OFS_UCAxRXBUF)); // Read UART data fast
-            SLIP_RX_produce_byte(rx_data);
-            break;
-
-        case USCI_UART_UCTXIFG: break;
-        case USCI_UART_UCSTTIFG: break;
-        case USCI_UART_UCTXCPTIFG:
-            SLIP_TX_consume_byte();
-            break;
-    }
-}
