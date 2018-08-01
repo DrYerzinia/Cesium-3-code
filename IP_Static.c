@@ -1,0 +1,5 @@
+#include "IP_Static.h"
+
+const uint8_t sat_ip[]      = {0x01, 0x01, 0x01, 0x01}; // 1.1.1.1
+const uint8_t ground_ip[]   = {0x01, 0x01, 0x01, 0x02}; // 1.1.1.2
+const uint8_t internal_ip[] = {0x01, 0x01, 0x01, 0x03}; // 1.1.1.3

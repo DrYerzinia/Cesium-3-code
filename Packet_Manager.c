@@ -1,6 +1,9 @@
 #include "Packet_Manager.h"
 
+#include "IP_Static.h"
+
 #include "CDH_SLIP.h"
+#include "EPS_SLIP.h"
 
 #include "util.h"
 
@@ -258,10 +261,6 @@ void CDH_SLIP_TX_consume_UHF_RX(){
         }
     }
 }
-
-
-uint8_t internal_ip[] = {0x01, 0x01, 0x01, 0x03}; // 1.1.1.3
-uint8_t ground_ip[]   = {0x01, 0x01, 0x01, 0x02}; // 1.1.1.2
 
 void UHF_TX_consume_CDH_SLIP_RX(){
 
