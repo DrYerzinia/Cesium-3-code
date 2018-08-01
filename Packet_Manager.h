@@ -23,6 +23,7 @@ extern Producer UHF_RX;
 void Packet_Manger_init();
 void Packet_Manger_process();
 
+void Internal_Message_produce_packet(uint8_t *data, uint16_t len, bool finish);
 void UHF_RX_produce_packet(uint8_t *data, uint16_t len, bool finish);
 
 void UHF_TX_consume_data();

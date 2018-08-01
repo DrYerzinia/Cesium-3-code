@@ -6,6 +6,8 @@
 #include "Packet_Manager.h"
 #include "UHF_Radio.h"
 
+#include "EPS_HnS.h"
+
 void Init_GPIO(void);
 void Init_Clock(void);
 void Init_UHFSPI();
@@ -72,9 +74,34 @@ uint16_t last_uhf_tx_packet_counter;
 
 uint8_t ticks_uhf_rx_partial = 0;
 
+#define EPS_HNS_BEACON_RATE 15 // Beacon every 15 seconds
+uint16_t EPS_HnS_beacon_time_counter = 0;
+
 // Timer A0 interrupt service routine
 #pragma vector=TIMER0_A0_VECTOR
 __interrupt void Timer_A0(void){
+
+    if(EPS_HnS_beacon_count == -1 || EPS_HnS_beacon_count > 0){
+
+        EPS_HnS_beacon_time_counter++;
+        if(EPS_HnS_beacon_time_counter >= EPS_HNS_BEACON_RATE * 10){
+
+            if(EPS_HnS_len > 0){
+
+                uint8_t tnc_port = 2;
+                Internal_Message_produce_packet(&tnc_port, sizeof(tnc_port), false);
+                Internal_Message_produce_packet(EPS_HnS, EPS_HnS_len, true);
+
+            }
+
+            EPS_HnS_beacon_time_counter = 0;
+            if(EPS_HnS_beacon_count > 0){
+                EPS_HnS_beacon_count--;
+            }
+
+        }
+
+    }
 
     heartbeat_counter++;
     if(heartbeat_counter == 10){
