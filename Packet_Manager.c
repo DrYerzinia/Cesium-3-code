@@ -1,5 +1,7 @@
 #include "Packet_Manager.h"
 
+#include "CDH_SLIP.h"
+
 #include "util.h"
 
 // Debug
@@ -58,14 +60,6 @@ Producer_Consumer_State CDH_SLIP_TX_producer_list[CDH_SLIP_TX_PRODUCER_COUNT];
 Producer_Consumer_State UHF_TX_producer_list[UHF_TX_PRODUCER_COUNT];
 Producer_Consumer_State Internal_Message_producer_list[Internal_Message_PRODUCER_COUNT];
 
-SLIP_Interface CDH_SLIP;
-SLIP_Interface EPS_SLIP;
-
-void CDH_slip_write(uint8_t data){
-
-        HWREG16(EUSCI_A0_BASE + OFS_UCAxTXBUF) = data;
-}
-
 void Packet_Manger_init(){
 
     // Initalize Producers
@@ -116,8 +110,7 @@ void Packet_Manger_init(){
     UHF_TX_producer_list[CDH_SLIP_RX_to_UHF_TX].producer = &CDH_SLIP_RX;
     UHF_TX_producer_list[CDH_SLIP_RX_to_UHF_TX].packet_list_offset = 0;
 
-    SLIP_init(&CDH_SLIP, CDH_slip_write, &CDH_SLIP_TX, &CDH_SLIP_RX);
-
+    CDH_SLIP_init(&CDH_SLIP_TX, &CDH_SLIP_RX);
 
 }
 
@@ -415,25 +408,4 @@ void Packet_Manger_process(){
     // 14) S-Band TX          from   S-Band RX          (If RADIO Loopback Mode SELF)
     // 15) S-Band TX          from   UHF RX             (If RADIO Loopback Mode OTHER)
 
-}
-
-// CDH SLIP Interface Interrupt
-#pragma vector = USCI_A0_VECTOR
-__interrupt void USCI_A0_ISR(void){
-
-    uint8_t rx_data;
-    switch (__even_in_range(UCA0IV, USCI_UART_UCTXCPTIFG)) {
-        case USCI_NONE: break;
-        case USCI_UART_UCRXIFG:
-
-            rx_data = (HWREG16(EUSCI_A0_BASE + OFS_UCAxRXBUF)); // Read UART data fast
-            SLIP_RX_produce_byte(&CDH_SLIP, rx_data);
-            break;
-
-        case USCI_UART_UCTXIFG: break;
-        case USCI_UART_UCSTTIFG: break;
-        case USCI_UART_UCTXCPTIFG:
-            SLIP_TX_consume_byte(&CDH_SLIP);
-            break;
-    }
 }
