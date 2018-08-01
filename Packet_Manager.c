@@ -33,15 +33,20 @@ Loopback_Mode radio_loopback_mode = DISABLED;
 #define UHF_TX_PRODUCER_COUNT 4
 #define CDH_SLIP_RX_to_UHF_TX 0
 
+#define EPS_TX_PRODUCER_COUNT 1
+#define EPS_SLIP_RX_to_Internal_Message 0
+
 Producer CDH_SLIP_RX;
 Producer UHF_RX;
 Producer SBAND_RX;
 Producer Internal_Message_Prod;
+Producer EPS_SLIP_RX;
 
 Consumer CDH_SLIP_TX;
 Consumer UHF_TX;
 Consumer SBAND_TX;
 Consumer Internal_Message_Cons;
+Consumer EPS_SLIP_TX;
 
 #define CDH_SLIP_RX_BUFFER_SIZE 8192
 #define CDH_SLIP_RX_PACKET_LIST_SIZE 32
@@ -53,15 +58,18 @@ uint8_t CDH_SLIP_RX_buffer[CDH_SLIP_RX_BUFFER_SIZE] = {0};
 uint8_t UHF_RX_buffer[512];
 uint8_t SBAND_RX_buffer[512];
 uint8_t Internal_Message_buffer[256];
+uint8_t EPS_SLIP_RX_buffer[256];
 
 Packet_Info CDH_SLIP_RX_packet_list[CDH_SLIP_RX_PACKET_LIST_SIZE];
 Packet_Info SBAND_RX_packet_list[5];
 Packet_Info UHF_RX_packet_list[5];
 Packet_Info Internal_Message_packet_list[2];
+Packet_Info EPS_SLIP_RX_list[2];
 
 Producer_Consumer_State CDH_SLIP_TX_producer_list[CDH_SLIP_TX_PRODUCER_COUNT];
 Producer_Consumer_State UHF_TX_producer_list[UHF_TX_PRODUCER_COUNT];
 Producer_Consumer_State Internal_Message_producer_list[Internal_Message_PRODUCER_COUNT];
+Producer_Consumer_State EPS_SLIP_TX_producer_list[EPS_TX_PRODUCER_COUNT];
 
 void Packet_Manger_init(){
 
@@ -95,6 +103,13 @@ void Packet_Manger_init(){
     Internal_Message_Prod.packet_list_offset = 0;
     Internal_Message_Prod.write_location = 0;
 
+    EPS_SLIP_RX.buffer = EPS_SLIP_RX_buffer;
+    EPS_SLIP_RX.buffer_length = 256;
+    EPS_SLIP_RX.packet_list = EPS_SLIP_RX_list;
+    EPS_SLIP_RX.packet_list_length = 2;
+    EPS_SLIP_RX.packet_list_offset = 0;
+    EPS_SLIP_RX.write_location = 0;
+
     // Initialize Consumers
     CDH_SLIP_TX.producer_list = CDH_SLIP_TX_producer_list;
     CDH_SLIP_TX.state = IDLE;
@@ -113,7 +128,13 @@ void Packet_Manger_init(){
     UHF_TX_producer_list[CDH_SLIP_RX_to_UHF_TX].producer = &CDH_SLIP_RX;
     UHF_TX_producer_list[CDH_SLIP_RX_to_UHF_TX].packet_list_offset = 0;
 
+    EPS_SLIP_TX.producer_list = EPS_SLIP_TX_producer_list;
+    EPS_SLIP_TX.state = IDLE;
+    EPS_SLIP_TX_producer_list[EPS_SLIP_RX_to_Internal_Message].producer = &EPS_SLIP_RX;
+    EPS_SLIP_TX_producer_list[EPS_SLIP_RX_to_Internal_Message].packet_list_offset = 0;
+
     CDH_SLIP_init(&CDH_SLIP_TX, &CDH_SLIP_RX);
+    EPS_SLIP_init(&EPS_SLIP_TX, &EPS_SLIP_RX);
 
 }
 
@@ -192,73 +213,74 @@ void UHF_TX_consume_data(){
 
 }
 
+void advance_pcs(Producer_Consumer_State * pcs){
+    pcs->packet_list_offset++;
+    if(pcs->packet_list_offset == pcs->producer->packet_list_length){
+        pcs->packet_list_offset = 0;
+    }
+}
+
+bool consume(Consumer * consumer, int producer_index, Consumer_Data * cd){
+
+    Producer_Consumer_State * pcs = &(consumer->producer_list[producer_index]);
+    while(pcs->packet_list_offset != pcs->producer->packet_list_offset){
+
+        Packet_Info * pinfo = &(pcs->producer->packet_list[pcs->packet_list_offset]);
+
+        // If fresh
+        if(pinfo->state == FRESH){
+
+            cd->pinfo = pinfo;
+            cd->pcs = pcs;
+            return true;
+
+        }
+
+        advance_pcs(pcs);
+
+    }
+
+    return false;
+
+}
+
 static inline void CDH_SLIP_TX_consume_CDH_SLIP_RX(){
 
-    // Loopback debug enabled
-    if(slip_loopback_mode == SELF){
+    // Loopback debug disabled or SLIP TX currently DMAing anything
+    if(slip_loopback_mode != SELF || CDH_SLIP_TX.state != IDLE) return;
 
-        // SLIP TX not currently DMAing anything
-        if(CDH_SLIP_TX.state == IDLE){
+    Consumer_Data cd = {0};
 
-            // If we are behind the producer in packets
-            Producer_Consumer_State * pcs = &(CDH_SLIP_TX.producer_list[CDH_SLIP_TX_to_CDH_SLIP_RX]);
-            while(pcs->packet_list_offset != pcs->producer->packet_list_offset){
+    if(consume(&CDH_SLIP_TX, CDH_SLIP_TX_to_CDH_SLIP_RX, &cd)){
 
-                Packet_Info * pinfo = &(pcs->producer->packet_list[pcs->packet_list_offset]);
+        // Starts sending packet through UART
+        SLIP_start(&CDH_SLIP, cd.pinfo, cd.pcs->producer->buffer);
 
-                // If fresh
-                if(pinfo->state == FRESH){
+        cd.pinfo->state = BEING_CONSUMED;
+        CDH_SLIP_TX.state = BUSY;
 
-                    // Starts sending packet through UART
-                    SLIP_start(&CDH_SLIP, pinfo, pcs->producer->buffer);
+        advance_pcs(cd.pcs);
 
-                    pinfo->state = BEING_CONSUMED;
-                    CDH_SLIP_TX.state = BUSY;
-
-                    break;
-
-                }
-
-                pcs->packet_list_offset++;
-                if(pcs->packet_list_offset == pcs->producer->packet_list_length){
-                    pcs->packet_list_offset = 0;
-                }
-
-            }
-        }
     }
 }
 
 void CDH_SLIP_TX_consume_UHF_RX(){
 
     // SLIP TX not currently DMAing anything
-    if(CDH_SLIP_TX.state == IDLE){
+    if(CDH_SLIP_TX.state != IDLE) return;
 
-        // If we are behind the producer in packets
-        Producer_Consumer_State * pcs = &(CDH_SLIP_TX.producer_list[CDH_SLIP_TX_to_UHF_RX]);
-        while(pcs->packet_list_offset != pcs->producer->packet_list_offset){
+    Consumer_Data cd = {0};
 
-            Packet_Info * pinfo = &(pcs->producer->packet_list[pcs->packet_list_offset]);
+    if(consume(&CDH_SLIP_TX, CDH_SLIP_TX_to_UHF_RX, &cd)){
 
-            // If fresh
-            if(pinfo->state == FRESH){
+        // Starts sending packet through UART
+        SLIP_start(&CDH_SLIP, cd.pinfo, cd.pcs->producer->buffer);
 
-                // Starts sending packet through UART
-                SLIP_start(&CDH_SLIP, pinfo, pcs->producer->buffer);
+        cd.pinfo->state = BEING_CONSUMED;
+        CDH_SLIP_TX.state = BUSY;
 
-                pinfo->state = BEING_CONSUMED;
-                CDH_SLIP_TX.state = BUSY;
+        advance_pcs(cd.pcs);
 
-                break;
-
-            }
-
-            pcs->packet_list_offset++;
-            if(pcs->packet_list_offset == pcs->producer->packet_list_length){
-                pcs->packet_list_offset = 0;
-            }
-
-        }
     }
 }
 
@@ -272,41 +294,31 @@ void UHF_TX_consume_CDH_SLIP_RX(){
 
     if(UHF_TX.state == BUSY) return;
 
-    Producer_Consumer_State * pcs = &(UHF_TX.producer_list[CDH_SLIP_RX_to_UHF_TX]);
-    while(pcs->packet_list_offset != pcs->producer->packet_list_offset){
+    Consumer_Data cd = {0};
 
-        Packet_Info * pinfo = &(pcs->producer->packet_list[pcs->packet_list_offset]);
+    while(consume(&UHF_TX, CDH_SLIP_RX_to_UHF_TX, &cd)){
 
-        // If fresh
-        if(pinfo->state == FRESH){
+        uint16_t offset = cd.pinfo->packet_offset;
+        uint8_t * data = cd.pcs->producer->buffer;
 
-            uint16_t offset = pinfo->packet_offset;
-            uint8_t * data = pcs->producer->buffer;
+        if(memcmp(data+offset+12, internal_ip, 4) != 0){ // Check that IP address not meant for internal
 
-            // TODO figure out what actual filtering to use here
-            if(memcmp(data+offset+12, internal_ip, 4) != 0){ // Check that IP address not meant for internal
-            //if(memcmp(data+offset+12, ground_ip, 4) != 0){ // Check that IP address matches target
+            UHF_TX.state = BUSY;
+            cd.pinfo->state = BEING_CONSUMED;
 
-                UHF_TX.state = BUSY;
-                pinfo->state = BEING_CONSUMED;
-
-                UHF_TX_pinfo = pinfo;
-                UHF_TX_data = data+offset;
-                UHF_TX_count = 0;
-                if(uhf_radio_state != TX){
-                    UHF_TX_consume_data();
-                }
-
-                break;
-
+            UHF_TX_pinfo = cd.pinfo;
+            UHF_TX_data = data+offset;
+            UHF_TX_count = 0;
+            if(uhf_radio_state != TX){
+                UHF_TX_consume_data();
             }
 
+            break;
+
         }
 
-        pcs->packet_list_offset++;
-        if(pcs->packet_list_offset == pcs->producer->packet_list_length){
-            pcs->packet_list_offset = 0;
-        }
+        advance_pcs(cd.pcs);
+
     }
 
 }
@@ -314,57 +326,54 @@ void UHF_TX_consume_CDH_SLIP_RX(){
 
 static inline void Internal_Message_consume_CDH_SLIP_RX(){
 
-    if(slip_loopback_mode == DISABLED){
+    if(slip_loopback_mode != DISABLED) return;
 
-        Producer_Consumer_State * pcs = &(Internal_Message_Cons.producer_list[CDH_SLIP_RX_to_Internal_Message]);
-        while(pcs->packet_list_offset != pcs->producer->packet_list_offset){
+    Consumer_Data cd = {0};
 
-            Packet_Info * pinfo = &(pcs->producer->packet_list[pcs->packet_list_offset]);
+    while(consume(&Internal_Message_Cons, CDH_SLIP_RX_to_Internal_Message, &cd)){
 
-            // If fresh
-            if(pinfo->state == FRESH){
+        uint16_t offset = cd.pinfo->packet_offset;
+        uint8_t * data = cd.pcs->producer->buffer;
 
-                uint16_t offset = pinfo->packet_offset;
-                uint8_t * data = pcs->producer->buffer;
+        if(memcmp(data+offset+12, internal_ip, 4) == 0){ // Check that IP address matches target
 
-                if(memcmp(data+offset+12, internal_ip, 4) == 0){ // Check that IP address matches target
-
-                    // Get command byte
-                    uint8_t cmd = data[offset+28];
-                    switch(cmd){
-                        case COMMAND_LED_ON:
-                            GPIO_setOutputHighOnPin(GPIO_PORT_P1, GPIO_PIN0);
-                            break;
-                        case COMMAND_LED_OFF:
-                            GPIO_setOutputLowOnPin(GPIO_PORT_P1, GPIO_PIN0);
-                            break;
-                        case COMMAND_ENTER_BSL:
-                            {
-                                __disable_interrupt(); // Ensure no application interrupts fire during BSL
-                                // This sends execution to the BSL. When execution
-                                // returns to the user app, it will be via the reset
-                                // vector, meaning execution will re-start.
-                                ((void (*)())0x1000)(); // BSL0
-                            }
-                            break;
-                        default:
-                            break;
+            // Get command byte
+            uint8_t cmd = data[offset+28];
+            switch(cmd){
+                case COMMAND_LED_ON:
+                    GPIO_setOutputHighOnPin(GPIO_PORT_P1, GPIO_PIN0);
+                    break;
+                case COMMAND_LED_OFF:
+                    GPIO_setOutputLowOnPin(GPIO_PORT_P1, GPIO_PIN0);
+                    break;
+                case COMMAND_ENTER_BSL:
+                    {
+                        __disable_interrupt(); // Ensure no application interrupts fire during BSL
+                        // This sends execution to the BSL. When execution
+                        // returns to the user app, it will be via the reset
+                        // vector, meaning execution will re-start.
+                        ((void (*)())0x1000)(); // BSL0
                     }
-
-                    pinfo->state = CONSUMED;
-
-                }
-
+                    break;
+                default:
+                    break;
             }
 
-            pcs->packet_list_offset++;
-            if(pcs->packet_list_offset == pcs->producer->packet_list_length){
-                pcs->packet_list_offset = 0;
-            }
+            cd.pinfo->state = CONSUMED;
 
         }
 
+        advance_pcs(cd.pcs);
+
     }
+}
+
+EPS_SLIP_TX_consume_Internal_Message(){
+    // TODO
+}
+
+Internal_Message_consume_EPS_SLIP_RX(){
+    //
 }
 
 void Packet_Manger_process(){
@@ -406,5 +415,11 @@ void Packet_Manger_process(){
 
     // 14) S-Band TX          from   S-Band RX          (If RADIO Loopback Mode SELF)
     // 15) S-Band TX          from   UHF RX             (If RADIO Loopback Mode OTHER)
+
+    // 17) EPS SLIP TX        from   Internal Message
+    // 18) Internal Message   from   EPS SLIP RX
+
+    EPS_SLIP_TX_consume_Internal_Message();
+    Internal_Message_consume_EPS_SLIP_RX();
 
 }

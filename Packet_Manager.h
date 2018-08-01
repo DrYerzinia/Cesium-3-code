@@ -2,6 +2,7 @@
 #define PACKET_MANAGER_H_
 
 #include <stdint.h>
+#include <stdbool.h>
 #include <string.h>
 
 #include "driverlib.h"

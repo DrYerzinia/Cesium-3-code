@@ -26,4 +26,11 @@ typedef struct {
 
 } Consumer;
 
+typedef struct {
+
+    Packet_Info * pinfo;
+    Producer_Consumer_State * pcs;
+
+} Consumer_Data;
+
 #endif
