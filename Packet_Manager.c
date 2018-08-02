@@ -24,12 +24,14 @@ Loopback_Mode radio_loopback_mode = DISABLED;
 #define COMMAND_LED_ON     0x01
 #define COMMAND_EPS_BEACON 0x02
 #define COMMAND_CDH_ON     0x03
+#define COMMAND_BSL_PASS   0x04
 #define COMMAND_ENTER_BSL  0xA3
 
 // Producer indexes for consumers
 #define CDH_SLIP_TX_PRODUCER_COUNT 4
 #define CDH_SLIP_TX_to_CDH_SLIP_RX 0
 #define CDH_SLIP_TX_to_UHF_RX 1
+#define Internal_Message_to_CDH_SLIP_TX 2
 
 #define Internal_Message_PRODUCER_COUNT 4
 #define CDH_SLIP_RX_to_Internal_Message 0
@@ -120,10 +122,12 @@ void Packet_Manger_init(){
     // Initialize Consumers
     CDH_SLIP_TX.producer_list = CDH_SLIP_TX_producer_list;
     CDH_SLIP_TX.state = IDLE;
-    CDH_SLIP_TX_producer_list[CDH_SLIP_TX_to_CDH_SLIP_RX].producer = &CDH_SLIP_RX;
+    CDH_SLIP_TX_producer_list[CDH_SLIP_TX_to_CDH_SLIP_RX].producer = &CDH_SLIP_RX; // TODO fix wording its backwards
     CDH_SLIP_TX_producer_list[CDH_SLIP_TX_to_CDH_SLIP_RX].packet_list_offset = 0;
-    CDH_SLIP_TX_producer_list[CDH_SLIP_TX_to_UHF_RX].producer = &UHF_RX;
+    CDH_SLIP_TX_producer_list[CDH_SLIP_TX_to_UHF_RX].producer = &UHF_RX; // TODO fix wording its backwards
     CDH_SLIP_TX_producer_list[CDH_SLIP_TX_to_UHF_RX].packet_list_offset = 0;
+    CDH_SLIP_TX_producer_list[Internal_Message_to_CDH_SLIP_TX].producer = &Internal_Message_Prod;
+    CDH_SLIP_TX_producer_list[Internal_Message_to_CDH_SLIP_TX].packet_list_offset = 0;
 
     Internal_Message_Cons.producer_list = Internal_Message_producer_list;
     Internal_Message_Cons.state = IDLE;
@@ -269,7 +273,7 @@ bool consume(Consumer * consumer, int producer_index, Consumer_Data * cd){
 
 }
 
-static inline void CDH_SLIP_TX_consume_CDH_SLIP_RX(){
+void CDH_SLIP_TX_consume_CDH_SLIP_RX(){
 
     // Loopback debug disabled or SLIP TX currently DMAing anything
     if(slip_loopback_mode != SELF || CDH_SLIP_TX.state != IDLE) return;
@@ -421,6 +425,13 @@ void Internal_Message_consume_CDH_SLIP_RX(){
                         ((void (*)())0x1000)(); // BSL0
                     }
                     break;
+                case COMMAND_BSL_PASS:
+                    {
+                        uint8_t route_cdh[1] = {0x03};
+                        Internal_Message_produce_packet(route_cdh, 1, false);
+                        Internal_Message_produce_packet((void*)0xFFE0, 0x20, true);
+                    }
+                    break;
                 default:
                     break;
             }
@@ -475,6 +486,34 @@ void Internal_Message_consume_UHF_RX(){
         advance_pcs(cd.pcs);
 
     }
+}
+
+CDH_SLIP_TX_consume_Internal_Message(){
+
+    // SLIP TX not currently DMAing anything
+    if(CDH_SLIP_TX.state != IDLE) return;
+
+    Consumer_Data cd = {0};
+
+    while(consume(&CDH_SLIP_TX, Internal_Message_to_CDH_SLIP_TX, &cd)){
+
+        uint16_t offset = cd.pinfo->packet_offset;
+        uint8_t * data = cd.pcs->producer->buffer;
+
+        if(*(data+offset) == 3){ // Opcode for COM to CDH, using as TNC port number where EPS in port 3
+
+            // Starts sending packet through UART
+            SLIP_start(&CDH_SLIP, cd.pinfo, cd.pcs->producer->buffer);
+
+            cd.pinfo->state = BEING_CONSUMED;
+            CDH_SLIP_TX.state = BUSY;
+
+        }
+
+        advance_pcs(cd.pcs);
+
+    }
+
 }
 
 EPS_SLIP_TX_consume_Internal_Message(){
@@ -551,6 +590,8 @@ void Packet_Manger_process(){
     // We want our messages to CDH to be before radio traffic and they should happen seldomly (Buffer Full Warning)
 
     // 5 ) SLIP TX            from   Internal Message
+
+    CDH_SLIP_TX_consume_Internal_Message();
 
     // Clearing out radio RX buffers is important
 
