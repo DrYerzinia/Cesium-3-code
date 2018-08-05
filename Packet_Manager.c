@@ -338,7 +338,7 @@ void CDH_SLIP_TX_consume_UHF_RX(){
 
         uint16_t offset = cd.pinfo->packet_offset;
         uint8_t * data = cd.pcs->producer->buffer;
-#ifdef FLIGHTRADIO
+#ifdef FLIGHTCESIUM
         if(memcmp(data+offset+12, internal_ip, 4) != 0){ // Check that IP address not meant for internal
 
             // Starts sending packet through UART
@@ -384,7 +384,7 @@ void UHF_TX_consume_CDH_SLIP_RX(){
         uint16_t offset = cd.pinfo->packet_offset;
         uint8_t * data = cd.pcs->producer->buffer;
 
-#ifdef FLIGHTRADIO
+#ifdef FLIGHTCESIUM
         if(memcmp(data+offset+12, internal_ip, 4) != 0){ // Check that IP address not meant for internal
 #endif
 #ifdef LAUNCHPAD
@@ -457,7 +457,7 @@ void Internal_Message_consume_CDH_SLIP_RX(){
         uint16_t offset = cd.pinfo->packet_offset;
         uint8_t * data = cd.pcs->producer->buffer;
 
-#ifdef FLIGHTRADIO
+#ifdef FLIGHTCESIUM
         if(memcmp(data+offset+12, internal_ip, 4) == 0){ // Check that IP address matches target
 
             // Get command byte
