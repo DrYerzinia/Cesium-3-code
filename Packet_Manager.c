@@ -569,12 +569,12 @@ void Internal_Message_consume_UHF_RX(){
             ip_hdr->ip_off = 0x40; // don't fragment, magic value
 
             for (i = 0; i < 4; i++){
-                ip_hdr->ip_src[i] = internal_ip[i];
+                ip_hdr->ip_src[i] = sat_ip[i];
                 ip_hdr->ip_dst[i] = ground_ip[i];
             }
             udp_hdr->len = SWAP16( (ETH_UDP_HEADER_SIZE + cd.pinfo->packet_length -2) );
-            udp_hdr->destport = SWAP16(5006ul);
-            udp_hdr->srcport  = SWAP16(20001ul);
+            udp_hdr->destport = SWAP16(35770ul);
+            udp_hdr->srcport  = SWAP16(35770ul);
             udp_hdr->chksum = 0; //checksum is optional
 
             ip_hdr->ip_sum = csum((uint16_t *) ip_hdr, ETH_IP_HEADER_SIZE);
@@ -615,7 +615,7 @@ CDH_SLIP_TX_consume_Internal_Message(){
         }
 
 #ifdef LAUNCHPAD
-        if(*(data+offset) == 0x45 && memcmp(data+offset+12, internal_ip, 4) == 0 && memcmp(data+offset+16, ground_ip, 4) == 0){
+        if(*(data+offset) == 0x45 && memcmp(data+offset+12, sat_ip, 4) == 0 && memcmp(data+offset+16, ground_ip, 4) == 0){
             SLIP_start(&CDH_SLIP, cd.pinfo, cd.pcs->producer->buffer);
 
             cd.pinfo->state = BEING_CONSUMED;
