@@ -229,8 +229,12 @@ void UHF_default_config(){
     Digital_Pot_SPI_stop();
 
     // Configure Radio
-    SPIRIT1_disable_smps(&sconf);
-    //SPIRIT1_set_crystal_correction(&sconf, -85);
+    #ifdef FLIGHTCESIUM
+        SPIRIT1_disable_smps(&sconf);
+    #endif
+    #ifdef LAUNCHPAD
+        SPIRIT1_set_crystal_correction(&sconf, -85);
+    #endif
     SPIRIT1_configure_gpio(&sconf, 0, SPIRIT1_GPIO_nIRQ | SPIRIT1_GPIO_DIG_OUT_LOWPWR);
     SPIRIT1_configure_irq_mask(&sconf, SPIRIT1_IRQ_RX_DATA_READY | SPIRIT1_IRQ_RX_FIFO_ALMOST_FULL | SPIRIT1_IRQ_TX_FIFO_ALMOST_EMPTY | SPIRIT1_IRQ_TX_DATA_SENT);
     SPIRIT1_setup_FIFO_thresholds(&sconf, 0x30, 0x30, 0x30, 20);
