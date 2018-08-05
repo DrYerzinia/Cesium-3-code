@@ -130,20 +130,27 @@ void SPIRIT1_enable_rx(SPIRIT1_CONFIG * sconf){
 
 void SPIRIT1_enable_persistent_rx(SPIRIT1_CONFIG * sconf){
 
-  //uint8_t proto_0 = readreg8(sconf, SPIRIT1_PROTOCOL_0);
-  //writereg8(sconf, SPIRIT1_PROTOCOL_0, proto_0 | (1 << SPIRIT1_PERS_RX_SHFIT));
+#ifdef LAUNCHPAD
+  uint8_t proto_0 = readreg8(sconf, SPIRIT1_PROTOCOL_0);
+  writereg8(sconf, SPIRIT1_PROTOCOL_0, proto_0 | (1 << SPIRIT1_PERS_RX_SHFIT));
+#endif
 
+#ifdef FLIGHTCESIUM
   writereg8(sconf, SPIRIT1_PROTOCOL_0, 0x8 | (1 << SPIRIT1_PERS_RX_SHFIT));
+#endif
 
 }
 
 void SPIRIT1_disable_smps(SPIRIT1_CONFIG * sconf){
 
-  //uint8_t pm_conf = readreg8(sconf, SPIRIT1_PM_CONFIG_2);
-  //writereg8(sconf, SPIRIT1_PM_CONFIG_2, pm_conf | (1 << SPIRIT1_DISABLE_SMPS_SHIFT));
+#ifdef LAUNCHPAD
+  uint8_t pm_conf = readreg8(sconf, SPIRIT1_PM_CONFIG_2);
+  writereg8(sconf, SPIRIT1_PM_CONFIG_2, pm_conf | (1 << SPIRIT1_DISABLE_SMPS_SHIFT));
+#endif
 
+#ifdef FLIGHTCESIUM
   writereg8(sconf, SPIRIT1_PM_CONFIG_2, 0xC | (1 << SPIRIT1_DISABLE_SMPS_SHIFT));
-
+#endif
 }
 
 void SPIRIT1_configure_gpio(SPIRIT1_CONFIG * sconf, uint8_t pin, uint8_t mode){
