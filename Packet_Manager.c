@@ -9,6 +9,40 @@
 
 #include "util.h"
 
+///////////// Some definitions for a real IP/UDP stack /////////////////////
+typedef struct _IPheader {
+    uint8_t ip_hl_v;   /**< Header length and version */
+    uint8_t ip_tos;    /**< Type of service */
+    uint16_t ip_len;   /**< Total length */
+    uint16_t ip_id;    /**< Identification */
+    uint16_t ip_off;   /**< Fragment offset field */
+    uint8_t ip_ttl;    /**< Time to live */
+    uint8_t ip_p;      /**< Protocol */
+    uint16_t ip_sum;   /**< Checksum */
+    uint8_t ip_src[4]; /**< Source IP address */
+    uint8_t ip_dst[4]; /**< Destination IP address */
+} ip_header_t, *p_ip_header_t;
+
+typedef struct _UDPheader {
+    uint16_t srcport;
+    uint16_t destport;
+    uint16_t len;
+    uint16_t chksum;
+} udp_header_t, *p_udp_header_t;
+
+/** Ethernet IP header size */
+#define ETH_IP_HEADER_SIZE   (sizeof(ip_header_t))
+
+/** Ethernet UDP header size */
+#define ETH_UDP_HEADER_SIZE (sizeof(udp_header_t))
+
+/** Swap 2 bytes of a word */
+#define SWAP16(x)   (((x & 0xff) << 8) | ((x & 0xFF00) >> 8))
+// Swap 4 bytes -> htonl
+#define SWAP32(x) ( ((x & 0xFF000000) >> 24) | ((x & 0x00FF0000) >> 8) | ((x & 0x0000FF00) << 8) | ((x & 0x000000FF) << 24) )
+
+#define IP_PROT_UDP             17
+
 // Debug
 
 typedef enum {
@@ -304,7 +338,7 @@ void CDH_SLIP_TX_consume_UHF_RX(){
 
         uint16_t offset = cd.pinfo->packet_offset;
         uint8_t * data = cd.pcs->producer->buffer;
-
+#ifdef FLIGHTRADIO
         if(memcmp(data+offset+12, internal_ip, 4) != 0){ // Check that IP address not meant for internal
 
             // Starts sending packet through UART
@@ -314,6 +348,19 @@ void CDH_SLIP_TX_consume_UHF_RX(){
             CDH_SLIP_TX.state = BUSY;
 
         }
+#endif
+
+#ifdef LAUNCHPAD
+        if(memcmp(data+offset+12, internal_ip, 4) != 0 && data[offset + 1] != 0x69){ // Check that IP address not meant for internal
+
+            // Starts sending packet through UART
+            SLIP_start(&CDH_SLIP, cd.pinfo, cd.pcs->producer->buffer);
+
+            cd.pinfo->state = BEING_CONSUMED;
+            CDH_SLIP_TX.state = BUSY;
+
+        }
+#endif
 
         advance_pcs(cd.pcs);
 
@@ -445,6 +492,26 @@ void Internal_Message_consume_CDH_SLIP_RX(){
     }
 }
 
+// IPv4 checksum stuff
+static inline uint16_t voidtouint16(void* mem, size_t offset) {
+    return *(((uint16_t*)mem)+offset);
+}
+
+uint16_t csum(void* mem, size_t len) {
+    uint32_t num = 0;
+    size_t i = 0;
+    while(i < (len-1)) {
+        num += SWAP16(voidtouint16(mem, i/2));
+        i += 2;
+    }
+    if (i < len) num += SWAP16(voidtouint16(mem, i/2));
+    while ((num >> 0x10) != 0) {
+        num = (num & 0xffff) + (num >> 0x10);
+    }
+    return ~(uint16_t)num;
+}
+
+
 void Internal_Message_consume_UHF_RX(){
 
     // TODO UHF loopback check
@@ -483,6 +550,44 @@ void Internal_Message_consume_UHF_RX(){
 
         }
 
+#ifdef LAUNCHPAD
+        if(data[offset + 1] == 0x69){
+            uint8_t buffer[300];
+            p_ip_header_t ip_hdr      = (p_ip_header_t)(buffer);
+            p_udp_header_t udp_hdr    = (p_udp_header_t)(buffer + ETH_IP_HEADER_SIZE);
+
+            int i;
+            size_t packet_length = ETH_IP_HEADER_SIZE + ETH_UDP_HEADER_SIZE + cd.pinfo->packet_length -2;
+
+            memset(buffer, 0, 300);
+
+            ip_hdr->ip_hl_v = 5 | (4 << 4); // header then version this order from swapping
+            ip_hdr->ip_tos = 0;
+            ip_hdr->ip_len = SWAP16( (ETH_IP_HEADER_SIZE + ETH_UDP_HEADER_SIZE + cd.pinfo->packet_length -2) );
+            ip_hdr->ip_ttl = 64;
+            ip_hdr->ip_p = IP_PROT_UDP;
+            ip_hdr->ip_off = 0x40; // don't fragment, magic value
+
+            for (i = 0; i < 4; i++){
+                ip_hdr->ip_src[i] = internal_ip[i];
+                ip_hdr->ip_dst[i] = ground_ip[i];
+            }
+            udp_hdr->len = SWAP16( (ETH_UDP_HEADER_SIZE + cd.pinfo->packet_length -2) );
+            udp_hdr->destport = SWAP16(5006ul);
+            udp_hdr->srcport  = SWAP16(20001ul);
+            udp_hdr->chksum = 0; //checksum is optional
+
+            ip_hdr->ip_sum = csum((uint16_t *) ip_hdr, ETH_IP_HEADER_SIZE);
+            ip_hdr->ip_sum = SWAP16(ip_hdr->ip_sum);
+
+            memcpy((uint8_t*)udp_hdr + ETH_UDP_HEADER_SIZE, data + offset + 2, cd.pinfo->packet_length -2);
+
+            Internal_Message_produce_packet(buffer, packet_length, true);
+
+            cd.pinfo->state = CONSUMED;
+        }
+#endif
+
         advance_pcs(cd.pcs);
 
     }
@@ -501,7 +606,6 @@ CDH_SLIP_TX_consume_Internal_Message(){
         uint8_t * data = cd.pcs->producer->buffer;
 
         if(*(data+offset) == 3){ // Opcode for COM to CDH, using as TNC port number where EPS in port 3
-
             // Starts sending packet through UART
             SLIP_start(&CDH_SLIP, cd.pinfo, cd.pcs->producer->buffer);
 
@@ -509,6 +613,15 @@ CDH_SLIP_TX_consume_Internal_Message(){
             CDH_SLIP_TX.state = BUSY;
 
         }
+
+#ifdef LAUNCHPAD
+        if(*(data+offset) == 0x45 && memcmp(data+offset+12, internal_ip, 4) == 0 && memcmp(data+offset+16, ground_ip, 4) == 0){
+            SLIP_start(&CDH_SLIP, cd.pinfo, cd.pcs->producer->buffer);
+
+            cd.pinfo->state = BEING_CONSUMED;
+            CDH_SLIP_TX.state = BUSY;
+        }
+#endif
 
         advance_pcs(cd.pcs);
 
