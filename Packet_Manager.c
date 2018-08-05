@@ -384,7 +384,12 @@ void UHF_TX_consume_CDH_SLIP_RX(){
         uint16_t offset = cd.pinfo->packet_offset;
         uint8_t * data = cd.pcs->producer->buffer;
 
+#ifdef FLIGHTRADIO
         if(memcmp(data+offset+12, internal_ip, 4) != 0){ // Check that IP address not meant for internal
+#endif
+#ifdef LAUNCHPAD
+        if(1){
+#endif
 
             UHF_TX.state = BUSY;
             cd.pinfo->state = BEING_CONSUMED;
@@ -452,6 +457,7 @@ void Internal_Message_consume_CDH_SLIP_RX(){
         uint16_t offset = cd.pinfo->packet_offset;
         uint8_t * data = cd.pcs->producer->buffer;
 
+#ifdef FLIGHTRADIO
         if(memcmp(data+offset+12, internal_ip, 4) == 0){ // Check that IP address matches target
 
             // Get command byte
@@ -486,6 +492,7 @@ void Internal_Message_consume_CDH_SLIP_RX(){
             cd.pinfo->state = CONSUMED;
 
         }
+#endif
 
         advance_pcs(cd.pcs);
 
