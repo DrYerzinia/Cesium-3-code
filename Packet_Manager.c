@@ -54,12 +54,23 @@ typedef enum {
 Loopback_Mode slip_loopback_mode = DISABLED;
 Loopback_Mode radio_loopback_mode = DISABLED;
 
-#define COMMAND_LED_OFF    0x00
-#define COMMAND_LED_ON     0x01
-#define COMMAND_EPS_BEACON 0x02
-#define COMMAND_CDH_ON     0x03
-#define COMMAND_BSL_PASS   0x04
-#define COMMAND_ENTER_BSL  0xA3
+#define COMMAND_LED_OFF       0x00
+#define COMMAND_LED_ON        0x01
+#define COMMAND_EPS_BEACON    0x02
+#define COMMAND_CDH_ON        0x03
+#define COMMAND_BSL_PASS      0x04
+#define COMMAND_MUTE_UHF_TX   0x05
+#define COMMAND_UNMUTE_UHF_TX 0x06
+#define COMMAND_CHANGE_BAUD   0x07
+#define COMMAND_ENTER_BSL     0xA3
+
+static const uint8_t mute_passwd[32] =
+    {
+        0x42, 0x76, 0x03, 0x2d, 0x1d, 0x4b, 0x0b, 0xac,
+        0xaf, 0x3a, 0xcc, 0x51, 0xaf, 0x7a, 0x1a, 0xe3,
+        0xfb, 0x72, 0xd5, 0xfe, 0x74, 0xd0, 0x0c, 0xac,
+        0x49, 0x5a, 0xa5, 0x98, 0x90, 0xc7, 0x7f, 0xe0
+    };
 
 // Producer indexes for consumers
 #define CDH_SLIP_TX_PRODUCER_COUNT 4
@@ -113,6 +124,9 @@ Producer_Consumer_State CDH_SLIP_TX_producer_list[CDH_SLIP_TX_PRODUCER_COUNT];
 Producer_Consumer_State UHF_TX_producer_list[UHF_TX_PRODUCER_COUNT];
 Producer_Consumer_State Internal_Message_producer_list[Internal_Message_PRODUCER_COUNT];
 Producer_Consumer_State EPS_SLIP_TX_producer_list[EPS_TX_PRODUCER_COUNT];
+
+#pragma PERSISTENT(uhf_tx_muted)
+bool uhf_tx_muted = false;
 
 void Packet_Manger_init(){
 
@@ -215,7 +229,7 @@ Packet_Info * UHF_TX_pinfo = 0;
 uint8_t * UHF_TX_data;
 uint16_t UHF_TX_count;
 
-#define FIFO_FILL 40
+#define FIFO_FILL 48
 
 uint16_t uhf_tx_packet_counter = 0;
 uint16_t uhf_rx_packet_counter = 0;
@@ -338,7 +352,7 @@ void CDH_SLIP_TX_consume_UHF_RX(){
 
         uint16_t offset = cd.pinfo->packet_offset;
         uint8_t * data = cd.pcs->producer->buffer;
-#ifdef FLIGHTRADIO
+#ifdef FLIGHTCESIUM
         if(memcmp(data+offset+12, internal_ip, 4) != 0){ // Check that IP address not meant for internal
 
             // Starts sending packet through UART
@@ -377,6 +391,9 @@ void UHF_TX_consume_CDH_SLIP_RX(){
 
     if(UHF_TX.state == BUSY) return;
 
+    // TX disabled
+    if(uhf_tx_muted) return;
+
     Consumer_Data cd = {0};
 
     while(consume(&UHF_TX, CDH_SLIP_RX_to_UHF_TX, &cd)){
@@ -384,7 +401,7 @@ void UHF_TX_consume_CDH_SLIP_RX(){
         uint16_t offset = cd.pinfo->packet_offset;
         uint8_t * data = cd.pcs->producer->buffer;
 
-#ifdef FLIGHTRADIO
+#ifdef FLIGHTCESIUM
         if(memcmp(data+offset+12, internal_ip, 4) != 0){ // Check that IP address not meant for internal
 #endif
 #ifdef LAUNCHPAD
@@ -416,6 +433,9 @@ UHF_TX_consume_Internal_Message(){
     if(uhf_radio_state == RX_PARTIAL || uhf_radio_state == RX_DONE) return;
 
     if(UHF_TX.state == BUSY) return;
+
+    // TX disabled
+    if(uhf_tx_muted) return;
 
     Consumer_Data cd = {0};
 
@@ -457,7 +477,7 @@ void Internal_Message_consume_CDH_SLIP_RX(){
         uint16_t offset = cd.pinfo->packet_offset;
         uint8_t * data = cd.pcs->producer->buffer;
 
-#ifdef FLIGHTRADIO
+#ifdef FLIGHTCESIUM
         if(memcmp(data+offset+12, internal_ip, 4) == 0){ // Check that IP address matches target
 
             // Get command byte
@@ -484,6 +504,9 @@ void Internal_Message_consume_CDH_SLIP_RX(){
                         Internal_Message_produce_packet(route_cdh, 1, false);
                         Internal_Message_produce_packet((void*)0xFFE0, 0x20, true);
                     }
+                    break;
+                case COMMAND_CHANGE_BAUD:
+                    UHF_change_baud(data[offset+29]);
                     break;
                 default:
                     break;
@@ -549,6 +572,22 @@ void Internal_Message_consume_UHF_RX(){
                         uint8_t com_on_command[1] = {0x01};
                         Internal_Message_produce_packet(com_on_command, 1, true);
                     }
+                    break;
+                case COMMAND_MUTE_UHF_TX:
+                    {
+                        // Muting TX requires password
+                        if(memcmp(data+offset+28+1,mute_passwd,32) == 0){
+                            uhf_tx_muted = true;
+                        }
+                    }
+                    break;
+                case COMMAND_UNMUTE_UHF_TX:
+                    {
+                        uhf_tx_muted = false;
+                    }
+                    break;
+                case COMMAND_CHANGE_BAUD:
+                    UHF_change_baud(data[offset+29]);
                     break;
 
             }
@@ -693,6 +732,14 @@ Internal_Message_consume_EPS_SLIP_RX(){
 
 }
 
+static inline void ACK(bool state){
+    if(state){
+        GPIO_setOutputHighOnPin(GPIO_PORT_P3, GPIO_PIN1);
+    } else {
+        GPIO_setOutputLowOnPin(GPIO_PORT_P3, GPIO_PIN1);
+    }
+}
+
 void Packet_Manger_process(){
 
     // Our messages to the ground are very important and should happen seldomly
@@ -742,5 +789,27 @@ void Packet_Manger_process(){
 
     EPS_SLIP_TX_consume_Internal_Message();
     Internal_Message_consume_EPS_SLIP_RX();
+
+    // Do flow control
+    {
+
+        int pos_rx = CDH_SLIP_RX.packet_list_offset;
+        int pos_tx = UHF_TX_producer_list[CDH_SLIP_RX_to_UHF_TX].packet_list_offset;
+
+        int ahead = 0;
+
+        if(pos_tx > pos_rx){
+            ahead = pos_rx + (CDH_SLIP_RX_PACKET_LIST_SIZE-pos_tx);
+        } else {
+            ahead = pos_rx-pos_tx;
+        }
+
+        if(ahead > 16){ // MAGIC number 16 packets we will try to keep buffer at
+            ACK(true); // packet buffer too full don't send ACK high
+        } else {
+            ACK(false); // packet buffer low keep sending ACK low
+        }
+
+    }
 
 }

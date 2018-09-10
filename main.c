@@ -13,14 +13,6 @@ void Init_Clock(void);
 void Init_UHFSPI();
 void Init_UART(void);
 
-static inline void ACK(bool state){
-    if(state){
-        GPIO_setOutputHighOnPin(GPIO_PORT_P3, GPIO_PIN1);
-    } else {
-        GPIO_setOutputLowOnPin(GPIO_PORT_P3, GPIO_PIN1);
-    }
-}
-
 static inline void RED_LED(bool state){
     if(state){
         GPIO_setOutputHighOnPin(GPIO_PORT_P1, GPIO_PIN0);
@@ -77,9 +69,22 @@ uint8_t ticks_uhf_rx_partial = 0;
 #define EPS_HNS_BEACON_RATE 15 // Beacon every 15 seconds
 uint16_t EPS_HnS_beacon_time_counter = 0;
 
+#define HIGHER_BAUD_TIMEOUT 15*60*10 // 15 minutes
+uint16_t uhf_baud_timeout_counter  = 0;
+
 // Timer A0 interrupt service routine
 #pragma vector=TIMER0_A0_VECTOR
 __interrupt void Timer_A0(void){
+
+    // If we are in a higher baud for more than 15 minutes reset our baud to 4k8
+    if(uhf_radio_baud == B4800){
+        uhf_baud_timeout_counter = 0;
+    } else {
+        uhf_baud_timeout_counter++;
+        if(uhf_baud_timeout_counter == HIGHER_BAUD_TIMEOUT){
+            UHF_set_modulation_gfsk4k8();
+        }
+    }
 
     if(EPS_HnS_beacon_count == -1 || EPS_HnS_beacon_count > 0){
 

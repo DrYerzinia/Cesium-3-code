@@ -14,12 +14,14 @@ SPI_Transaction spi_transactions[SPI_TRANSACTION_COUNT];
 uint8_t spi_tx_data[SPI_DATA_LEN];
 uint8_t spi_rx_data[SPI_DATA_LEN];
 
-#define TEMP_SPI_TRANSACTION_LEN 100
+#define TEMP_SPI_TRANSACTION_LEN 200
 
 uint8_t spi_transaction_buf_pos;
 uint8_t spi_transaction_buf[TEMP_SPI_TRANSACTION_LEN];
 
 UHF_Radio_State uhf_radio_state = RX;
+
+UHF_Radio_Baud uhf_radio_baud;
 
 bool consuming_transactions  = false;
 
@@ -187,7 +189,8 @@ void UHF_irq_cb(uint8_t *data, uint16_t len){
 
               UHF_TX_consume_data();
 
-          } else if(val & SPIRIT1_IRQ_TX_DATA_SENT){
+          }
+          if(val & SPIRIT1_IRQ_TX_DATA_SENT){
               // If the TX data was sent, check to see if UHF TX packet manager is idle
               // if it is switch back to receive
               if(UHF_TX.state == IDLE){
@@ -214,7 +217,100 @@ void UHF_irq_cb(uint8_t *data, uint16_t len){
           // Read FIFO
           break;
   }
+  if(GPIO_getInputPinValue(GPIO_PORT_P4, GPIO_PIN3) == 0){
+      // More problems already...
+      SPIRIT1_get_irq_status_cb(&sconf, UHF_irq_cb);
+  }
 
+}
+
+void UHF_set_modulation_gfsk4k8(){
+
+    SPIRIT1_MODULATION_CONFIG gfsk_4_8_kbps;
+    gfsk_4_8_kbps.datarate_m = 0x93;   // 4.8kbps
+    gfsk_4_8_kbps.datarate_e = 0x07;
+    gfsk_4_8_kbps.fdev_m  = 0x05;      // 2.4kHz deviation
+    gfsk_4_8_kbps.fdev_e = 0x01;
+    gfsk_4_8_kbps.chflt_m  = 0x01;     // 26kHz Channel Filter
+    gfsk_4_8_kbps.chflt_e = 0x05;
+    gfsk_4_8_kbps.cw = 0;              // No CW tone
+    gfsk_4_8_kbps.bt_sel = BT_SEL_1;
+    gfsk_4_8_kbps.mod_type = GFSK;
+    SPIRIT1_set_modulation(&sconf, &gfsk_4_8_kbps);
+
+    uhf_radio_baud = B4800;
+
+}
+
+void UHF_set_modulation_gfsk9k6(){
+
+    SPIRIT1_MODULATION_CONFIG gfsk_9_6_kbps;
+    gfsk_9_6_kbps.datarate_m = 0x83;   // 9.6kbps ~ 9.595kbps
+    gfsk_9_6_kbps.datarate_e = 0x08;
+    gfsk_9_6_kbps.fdev_m  = 0x04;      // 4.8kHz ~ 4.76kHz deviation
+    gfsk_9_6_kbps.fdev_e = 0x02;
+    gfsk_9_6_kbps.chflt_m  = 0x01;     // 26kHz Channel Filter
+    gfsk_9_6_kbps.chflt_e = 0x05;
+    gfsk_9_6_kbps.cw = 0;              // No CW tone
+    gfsk_9_6_kbps.bt_sel = BT_SEL_1;
+    gfsk_9_6_kbps.mod_type = GFSK;
+    SPIRIT1_set_modulation(&sconf, &gfsk_9_6_kbps);
+
+    uhf_radio_baud = B9600;
+
+}
+
+void UHF_set_modulation_gfsk19k2(){
+
+    SPIRIT1_MODULATION_CONFIG gfsk_19_2_kbps;
+    gfsk_19_2_kbps.datarate_m = 0x83;   // 19.2kbps ~ 19.191kbps
+    gfsk_19_2_kbps.datarate_e = 0x09;
+    gfsk_19_2_kbps.fdev_m  = 0x04;      // 9.6kHz ~ 9.521kHz deviation
+    gfsk_19_2_kbps.fdev_e = 0x03;
+    gfsk_19_2_kbps.chflt_m  = 0x03;     // 48kHz Channel Filter
+    gfsk_19_2_kbps.chflt_e = 0x04;
+    gfsk_19_2_kbps.cw = 0;              // No CW tone
+    gfsk_19_2_kbps.bt_sel = BT_SEL_1;
+    gfsk_19_2_kbps.mod_type = GFSK;
+    SPIRIT1_set_modulation(&sconf, &gfsk_19_2_kbps);
+
+    uhf_radio_baud = B19200;
+
+}
+
+void UHF_set_modulation_gfsk38k4(){
+
+    SPIRIT1_MODULATION_CONFIG gfsk_38_4_kbps;
+    gfsk_38_4_kbps.datarate_m = 131; // 38.4kbps
+    gfsk_38_4_kbps.datarate_e = 10;
+    gfsk_38_4_kbps.fdev_m  = 5;      // 20kHz deviation ~
+    gfsk_38_4_kbps.fdev_e = 4;
+    gfsk_38_4_kbps.chflt_m  = 1;     // 100kHz Channel Filter
+    gfsk_38_4_kbps.chflt_e = 3;
+    gfsk_38_4_kbps.cw = 0;           // No CW tone
+    gfsk_38_4_kbps.bt_sel = BT_SEL_1;
+    gfsk_38_4_kbps.mod_type = GFSK;
+    SPIRIT1_set_modulation(&sconf, &gfsk_38_4_kbps);
+
+    uhf_radio_baud = B38400;
+
+}
+
+void UHF_change_baud(UHF_Radio_Baud new_baud){
+    switch(new_baud){
+        case B4800:
+            UHF_set_modulation_gfsk4k8();
+            break;
+        case B9600:
+            UHF_set_modulation_gfsk9k6();
+            break;
+        case B19200:
+            UHF_set_modulation_gfsk19k2();
+            break;
+        case B38400:
+            UHF_set_modulation_gfsk38k4();
+            break;
+    }
 }
 
 void UHF_default_config(){
@@ -258,78 +354,15 @@ void UHF_default_config(){
     SPIRIT1_set_packet_config(&sconf, &pkt_conf);
 
     SPIRIT1_FREQUENCY_CONFIG freq_conf;
-    freq_conf.synt = 12626952;           // 401.4MHz
+    freq_conf.synt = 12625850;           // ~401.365MHz (401.364962MHz)
     freq_conf.band = SPIRIT1_12_BAND;    // 433MHz band
     freq_conf.refdiv = SPIRIT1_REFDIV_1; // Don't divide ref
     freq_conf.wcp = 2;
     freq_conf.vco_hl = SPIRIT1_VCO_L_SEL;
     SPIRIT1_set_base_frequency(&sconf, &freq_conf);
 
-    SPIRIT1_MODULATION_CONFIG gfsk_4_8_kbps;
-    gfsk_4_8_kbps.datarate_m = 0x93;   // 4.8kbps
-    gfsk_4_8_kbps.datarate_e = 0x07;
-    gfsk_4_8_kbps.fdev_m  = 0x05;      // 2.4kHz deviation
-    gfsk_4_8_kbps.fdev_e = 0x01;
-    gfsk_4_8_kbps.chflt_m  = 0x01;     // 26kHz Channel Filter
-    gfsk_4_8_kbps.chflt_e = 0x05;
-    gfsk_4_8_kbps.cw = 0;              // No CW tone
-    gfsk_4_8_kbps.bt_sel = BT_SEL_1;
-    gfsk_4_8_kbps.mod_type = GFSK;
-    SPIRIT1_set_modulation(&sconf, &gfsk_4_8_kbps);
-
-    /*
-    SPIRIT1_MODULATION_CONFIG gmsk_4_8_kbps;
-    gmsk_4_8_kbps.datarate_m = 0x93;   // 4.8kbps
-    gmsk_4_8_kbps.datarate_e = 0x07;
-    gmsk_4_8_kbps.fdev_m  = 0x05;      // 1.2kHz deviation
-    gmsk_4_8_kbps.fdev_e = 0x00;
-    gmsk_4_8_kbps.chflt_m  = 0x01;     // 26kHz Channel Filter
-    gmsk_4_8_kbps.chflt_e = 0x05;
-    gmsk_4_8_kbps.cw = 0;              // No CW tone
-    gmsk_4_8_kbps.bt_sel = BT_SEL_0_5;
-    gmsk_4_8_kbps.mod_type = GFSK;
-    SPIRIT1_set_modulation(&sconf, &gmsk_4_8_kbps);
-    */
-    /*
-    SPIRIT1_MODULATION_CONFIG gmsk_9_6_kbps;
-    gmsk_9_6_kbps.datarate_m = 0x8B;   // 9.6kbps
-    gmsk_9_6_kbps.datarate_e = 0x08;
-    gmsk_9_6_kbps.fdev_m  = 0x04;      // 2.4kHz deviation
-    gmsk_9_6_kbps.fdev_e = 0x01;
-    gmsk_9_6_kbps.chflt_m  = 0x01;     // 26kHz Channel Filter
-    gmsk_9_6_kbps.chflt_e = 0x05;
-    gmsk_9_6_kbps.cw = 0;              // No CW tone
-    gmsk_9_6_kbps.bt_sel = BT_SEL_0_5;
-    gmsk_9_6_kbps.mod_type = GFSK;
-    SPIRIT1_set_modulation(&sconf, &gmsk_9_6_kbps);
-    */
-    /*
-    SPIRIT1_MODULATION_CONFIG gmsk_38_4_kbps;
-    gmsk_38_4_kbps.datarate_m = 131; // 38.4kbps
-    gmsk_38_4_kbps.datarate_e = 10;
-    gmsk_38_4_kbps.fdev_m  = 35;      // 9.8kHz deviation
-    gmsk_38_4_kbps.fdev_e = 3;
-    gmsk_38_4_kbps.chflt_m  = 0;     // 54kHz Channel Filter
-    gmsk_38_4_kbps.chflt_e = 4;
-    gmsk_38_4_kbps.cw = 0;           // No CW tone
-    gmsk_38_4_kbps.bt_sel = BT_SEL_0_5;
-    gmsk_38_4_kbps.mod_type = GFSK;
-    SPIRIT1_set_modulation(&sconf, &gmsk_38_4_kbps);
-    */
-    /*
-    SPIRIT1_MODULATION_CONFIG gfsk_38_4_kbps;
-    gfsk_38_4_kbps.datarate_m = 131; // 38.4kbps
-    gfsk_38_4_kbps.datarate_e = 10;
-    gfsk_38_4_kbps.fdev_m  = 5;      // 20kHz deviation ~
-    gfsk_38_4_kbps.fdev_e = 4;
-    gfsk_38_4_kbps.chflt_m  = 1;     // 100kHz Channel Filter
-    gfsk_38_4_kbps.chflt_e = 3;
-    gfsk_38_4_kbps.cw = 0;           // No CW tone
-    gfsk_38_4_kbps.bt_sel = BT_SEL_1;
-    gfsk_38_4_kbps.mod_type = GFSK;
-    SPIRIT1_set_modulation(&sconf, &gfsk_38_4_kbps);
-    */
-
+    // Default modulation 4k8
+    UHF_set_modulation_gfsk4k8();
 
     // Configure IRQ sources
 
@@ -475,7 +508,7 @@ void Init_UHFSPI(){
     EUSCI_B_SPI_initMasterParam param = {0};
     param.selectClockSource = EUSCI_B_SPI_CLOCKSOURCE_SMCLK;
     param.clockSourceFrequency = 8000000;
-    param.desiredSpiClock = 1000000;
+    param.desiredSpiClock = 8000000;
     param.msbFirst = EUSCI_B_SPI_MSB_FIRST;
     param.clockPhase = EUSCI_B_SPI_PHASE_DATA_CAPTURED_ONFIRST_CHANGED_ON_NEXT;
     param.clockPolarity = EUSCI_B_SPI_CLOCKPOLARITY_INACTIVITY_LOW;
