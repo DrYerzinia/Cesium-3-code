@@ -5,6 +5,8 @@
 
 #include <stddef.h>
 
+bool UHF_IRQ = false;
+
 // UHF SPI Transaction Buffer
 #define SPI_TRANSACTION_COUNT 20
 #define SPI_DATA_LEN 200
@@ -576,7 +578,9 @@ __interrupt void Port_4(void){
 
     if((stat & GPIO_PIN3)){
 
-        SPIRIT1_get_irq_status_cb(&sconf, UHF_irq_cb);
+        // TODO trigger something here instead of flag
+        //SPIRIT1_get_irq_status_cb(&sconf, UHF_irq_cb);
+        UHF_IRQ = true;
         GPIO_clearInterrupt(GPIO_PORT_P4, GPIO_PIN3);
 
     }

@@ -28,6 +28,8 @@ extern UHF_Radio_State uhf_radio_state;
 
 extern SPIRIT1_CONFIG sconf;
 
+extern bool UHF_IRQ;
+
 void UHF_Radio_init();
 
 void UHF_init_RX();

@@ -790,6 +790,18 @@ void Packet_Manger_process(){
     EPS_SLIP_TX_consume_Internal_Message();
     Internal_Message_consume_EPS_SLIP_RX();
 
+    // Check on hardware
+    // TODO put somewhere else
+    if(UHF_IRQ){
+        SPIRIT1_get_irq_status_cb(&sconf, UHF_irq_cb);
+        UHF_IRQ = false;
+    } else {
+        if(GPIO_getInputPinValue(GPIO_PORT_P4, GPIO_PIN3) == 0){
+            // More problems already...
+            SPIRIT1_get_irq_status_cb(&sconf, UHF_irq_cb);
+        }
+    }
+
     // Do flow control
     {
 
