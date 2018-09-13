@@ -372,3 +372,7 @@ void SPIRIT1_abort(SPIRIT1_CONFIG * sconf){
 void SPIRIT1_flush_tx(SPIRIT1_CONFIG * sconf){
     command(sconf, SPIRIT1_CMD_FLUSHTXFIFO);
 }
+
+void SPIRIT1_flush_rx(SPIRIT1_CONFIG * sconf){
+    command(sconf, SPIRIT1_CMD_FLUSHRXFIFO);
+}

@@ -205,14 +205,23 @@ void UHF_irq_cb(uint8_t *data, uint16_t len){
           break;
       case RX:
       case RX_PARTIAL:
-          if(val & SPIRIT1_IRQ_RX_DATA_READY){
+          if(val & SPIRIT1_IRQ_CRC_ERROR){
 
+              // If there was a CRC error ignore the packet
+              uhf_radio_state = RX;
+              UHF_RX_reset_packet();
+              SPIRIT1_flush_rx(&sconf);
+
+          } else if(val & SPIRIT1_IRQ_RX_DATA_READY){
+
+              // If we finished and data is ready
               uhf_radio_state = RX_DONE;
               SPIRIT1_get_rx_fifo_len_cb(&sconf, UHF_rx_fifo_len);
               uhf_rx_packet_counter++;
 
           } else if(val & SPIRIT1_IRQ_RX_FIFO_ALMOST_FULL){
 
+              // Keep the RX fifo low
               uhf_radio_state = RX_PARTIAL;
               SPIRIT1_get_rx_fifo_len_cb(&sconf, UHF_rx_fifo_len);
 
@@ -356,7 +365,7 @@ void UHF_default_config(){
         SPIRIT1_set_crystal_correction(&sconf, -85);
     #endif
     SPIRIT1_configure_gpio(&sconf, 0, SPIRIT1_GPIO_nIRQ | SPIRIT1_GPIO_DIG_OUT_LOWPWR);
-    SPIRIT1_configure_irq_mask(&sconf, SPIRIT1_IRQ_RX_DATA_READY | SPIRIT1_IRQ_RX_FIFO_ALMOST_FULL | SPIRIT1_IRQ_TX_FIFO_ALMOST_EMPTY | SPIRIT1_IRQ_TX_DATA_SENT);
+    SPIRIT1_configure_irq_mask(&sconf, SPIRIT1_IRQ_RX_DATA_READY | SPIRIT1_IRQ_RX_FIFO_ALMOST_FULL | SPIRIT1_IRQ_TX_FIFO_ALMOST_EMPTY | SPIRIT1_IRQ_TX_DATA_SENT | SPIRIT1_IRQ_CRC_ERROR);
     SPIRIT1_setup_FIFO_thresholds(&sconf, 0x30, 0x30, 0x30, 20);
     SPIRIT1_configure_pa(&sconf, 1); // 11dBm but with boost config should be about 16dBm
 

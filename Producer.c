@@ -1,5 +1,11 @@
 #include "Producer.h"
 
+void reset_producer(Producer * p){
+
+    p->write_location = p->last_pkt_start_location;
+
+}
+
 void advance_producer(Producer * p){
 
     uint16_t plen = p->write_location - p->last_pkt_start_location;

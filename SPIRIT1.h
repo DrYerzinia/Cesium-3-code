@@ -56,6 +56,7 @@
 
 #define SPIRIT1_IRQ_RX_DATA_READY        (1<<0)
 #define SPIRIT1_IRQ_TX_DATA_SENT         (1<<2)
+#define SPIRIT1_IRQ_CRC_ERROR            (1<<4)
 #define SPIRIT1_IRQ_TX_FIFO_ALMOST_FULL  (1<<7)
 #define SPIRIT1_IRQ_TX_FIFO_ALMOST_EMPTY (1<<8)
 #define SPIRIT1_IRQ_RX_FIFO_ALMOST_FULL  (1<<9)
@@ -292,6 +293,7 @@ void SPIRIT1_disable_persistent_tx(SPIRIT1_CONFIG * sconf);
 void SPIRIT1_goto_ready(SPIRIT1_CONFIG * sconf);
 void SPIRIT1_abort(SPIRIT1_CONFIG * sconf);
 void SPIRIT1_flush_tx(SPIRIT1_CONFIG * sconf);
+void SPIRIT1_flush_rx(SPIRIT1_CONFIG * sconf);
 
 void write_block(SPIRIT1_CONFIG * sconf, uint8_t addr, uint8_t * buf, uint8_t len);
 void writereg8(SPIRIT1_CONFIG * sconf, uint8_t addr, uint8_t val);

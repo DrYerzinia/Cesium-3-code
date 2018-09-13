@@ -19,5 +19,6 @@ typedef struct {
 } Producer;
 
 void advance_producer(Producer * p);
+void reset_producer(Producer * p);
 
 #endif

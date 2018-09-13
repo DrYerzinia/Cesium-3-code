@@ -228,6 +228,10 @@ void UHF_RX_produce_packet(uint8_t *data, uint16_t len, bool finish){
 
 }
 
+void UHF_RX_reset_packet(){
+    reset_producer(&UHF_RX);
+}
+
 Packet_Info * UHF_TX_pinfo = 0;
 uint8_t * UHF_TX_data;
 uint16_t UHF_TX_count;
