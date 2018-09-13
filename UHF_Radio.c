@@ -196,6 +196,8 @@ void UHF_irq_cb(uint8_t *data, uint16_t len){
               // If the TX data was sent, check to see if UHF TX packet manager is idle
               // if it is switch back to receive
               if(UHF_TX.state == IDLE){
+                  // Delay required to keep PA on at higher baud rates the IRQ is a lie
+                  __delay_cycles(100000);
                   UHF_init_RX();
               }
 
@@ -478,7 +480,8 @@ void UHF_init_TX(){
     UHF_PA_Gate_EN(true);  // TODO maybe sync with packet start
     // TODO watchdog to make sure we don't get stuck with PA burning power
 
-    __delay_cycles(4000000); // TODO timer callback for PA warmup
+    // PA Spool up time
+    __delay_cycles(400000); // TODO timer callback for PA warmup
 
     SPIRIT1_get_irq_status_cb(&sconf, UHF_irq_cb);
 
