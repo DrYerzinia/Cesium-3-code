@@ -229,7 +229,9 @@ Packet_Info * UHF_TX_pinfo = 0;
 uint8_t * UHF_TX_data;
 uint16_t UHF_TX_count;
 
-#define FIFO_FILL 48
+// For continuous stream we might have this happen 3 times in a row so max fill is 96/3 32
+// For burst it can happen 2x so max is 96/2 48
+#define FIFO_FILL 32
 
 uint16_t uhf_tx_packet_counter = 0;
 uint16_t uhf_rx_packet_counter = 0;
