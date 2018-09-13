@@ -9,6 +9,9 @@
 
 #include "util.h"
 
+#define   ntohs(x)    (((x>>8) & 0xFF) | ((x & 0xFF)<<8))
+#define   htons(x)    (((x>>8) & 0xFF) | ((x & 0xFF)<<8))
+
 ///////////// Some definitions for a real IP/UDP stack /////////////////////
 typedef struct _IPheader {
     uint8_t ip_hl_v;   /**< Header length and version */
@@ -413,8 +416,23 @@ void UHF_TX_consume_CDH_SLIP_RX(){
             UHF_TX.state = BUSY;
             cd.pinfo->state = BEING_CONSUMED;
 
+            // TODO strip IP header from downlink packets
+
+            data += offset;
+
+            // Strip the IP header for downlink data packets
+            p_ip_header_t ip_hdr      = (p_ip_header_t)(data);
+            p_udp_header_t udp_hdr    = (p_udp_header_t)(data + ETH_IP_HEADER_SIZE);
+            if(     data[0] == 0x45
+                 && cd.pinfo->packet_length >= ETH_IP_HEADER_SIZE + ETH_UDP_HEADER_SIZE
+                 && ntohs(udp_hdr->destport) == 35777
+                 ){
+                data += ETH_IP_HEADER_SIZE + ETH_UDP_HEADER_SIZE;
+                cd.pinfo->packet_length -= ETH_IP_HEADER_SIZE + ETH_UDP_HEADER_SIZE;
+                cd.pinfo->packet_offset += ETH_IP_HEADER_SIZE + ETH_UDP_HEADER_SIZE;
+            }
             UHF_TX_pinfo = cd.pinfo;
-            UHF_TX_data = data+offset;
+            UHF_TX_data = data;
             UHF_TX_count = 0;
             if(uhf_radio_state != TX){
                 UHF_TX_consume_data();
