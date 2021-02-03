@@ -11,7 +11,6 @@
 void Init_GPIO(void);
 void Init_Clock(void);
 void Init_UHFSPI();
-void Init_UART(void);
 
 static inline void RED_LED(bool state){
     if(state){
@@ -77,12 +76,12 @@ uint16_t uhf_baud_timeout_counter  = 0;
 __interrupt void Timer_A0(void){
 
     // If we are in a higher baud for more than 15 minutes reset our baud to 4k8
-    if(uhf_radio_baud == B4800){
+    if(uhf_radio_baud == B300){
         uhf_baud_timeout_counter = 0;
     } else {
         uhf_baud_timeout_counter++;
         if(uhf_baud_timeout_counter == HIGHER_BAUD_TIMEOUT){
-            UHF_set_modulation_gfsk4k8();
+            UHF_set_modulation_gfsk300();
         }
     }
 
@@ -272,7 +271,7 @@ void Init_Clock()
     // Set MCLK = DCO with frequency divider of 1
     CS_initClockSignal(CS_MCLK, CS_DCOCLK_SELECT, CS_CLOCK_DIVIDER_1);
     //Start XT1 with no time out
-    CS_turnOnLFXT(CS_LFXT_DRIVE_3);
+    //CS_turnOnLFXT(CS_LFXT_DRIVE_3);
 }
 
 

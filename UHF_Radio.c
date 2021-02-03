@@ -237,6 +237,39 @@ void UHF_irq_cb(uint8_t *data, uint16_t len){
 
 }
 
+void UHF_set_modulation(SPIRIT1_MODULATION_CONFIG *mod, UHF_Radio_Baud baud){
+
+    SPIRIT1_set_modulation(&sconf, mod);
+
+    uhf_radio_baud = baud;
+
+}
+
+void UHF_set_modulation_gfsk300(){
+
+    SPIRIT1_MODULATION_CONFIG mod;
+
+    mod.datarate_m = 147;   // 300bps
+    mod.datarate_e = 3;
+
+    mod.fdev_m  = 0;        // Ignored for MSK
+    mod.fdev_e = 0;
+
+    mod.chflt_m  = 0;       // 800Hz Channel Filter
+    mod.chflt_e = 0;
+
+    mod.cw = 0;             // No CW tone
+
+    mod.bt_sel = 0;         // Ignored for MSK
+
+    mod.mod_type = MSK;
+
+    SPIRIT1_set_modulation(&sconf, &mod);
+
+    UHF_set_modulation(&mod, B300);
+
+}
+
 void UHF_set_modulation_gfsk4k8(){
 
     SPIRIT1_MODULATION_CONFIG gfsk_4_8_kbps;
@@ -328,6 +361,9 @@ void UHF_set_modulation_gfsk76k8(){
 
 void UHF_change_baud(UHF_Radio_Baud new_baud){
     switch(new_baud){
+        case B300:
+            UHF_set_modulation_gfsk300();
+            break;
         case B4800:
             UHF_set_modulation_gfsk4k8();
             break;
@@ -394,8 +430,8 @@ void UHF_default_config(){
     freq_conf.vco_hl = SPIRIT1_VCO_L_SEL;
     SPIRIT1_set_base_frequency(&sconf, &freq_conf);
 
-    // Default modulation 4k8
-    UHF_set_modulation_gfsk4k8();
+    // Default modulation 300
+    UHF_set_modulation_gfsk300();
 
     // Configure IRQ sources
 

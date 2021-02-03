@@ -14,12 +14,14 @@ typedef enum {
 
 typedef enum {
 
+    B300,
     B4800,
     B9600,
     B19200,
     B38400,
     B76800,
-    B115200
+    B115200,
+    BCUSTOM
 
 } UHF_Radio_Baud;
 

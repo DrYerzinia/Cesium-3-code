@@ -219,14 +219,32 @@ typedef struct {
 
 typedef struct {
 
+  /*
+   * datarate_m = [0, 255]
+   * datarate_e = [0, 15]
+   * datarate = f_clk * (256 + datarate_m) * (2**datarate_e) / (2**28)
+   */
   uint8_t datarate_m;
   uint8_t datarate_e;
+
+  /*
+   * fdev_m = [0, 7]
+   * fdev_e = [0, 9]
+   * fdev = f_xo * floor((8 + fdev_m) * 2**(fdev_e-1)) / (2**18)
+   */
   uint8_t fdev_m;
   uint8_t fdev_e;
+
+  /*
+   *
+   */
   uint8_t chflt_m;
   uint8_t chflt_e;
+
   uint8_t cw;
+
   SPIRIT1_MOD_BT bt_sel;
+
   SPIRIT1_MOD_MODE mod_type;
 
 } SPIRIT1_MODULATION_CONFIG;
